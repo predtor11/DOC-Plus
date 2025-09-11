@@ -14,7 +14,6 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar';
 import {
-  LayoutDashboard,
   LogOut,
   Stethoscope,
   Heart
@@ -27,7 +26,6 @@ const PatientSidebar = () => {
   const collapsed = state === 'collapsed';
 
   const patientItems = [
-    { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
     { title: 'AI Support', url: '/ai-chat', icon: Heart },
     { title: 'My Doctor', url: '/doctor-chat', icon: Stethoscope },
   ];

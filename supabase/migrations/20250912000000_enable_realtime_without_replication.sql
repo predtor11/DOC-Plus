@@ -16,20 +16,34 @@ END $$;
 -- Add the messages table to the realtime publication
 ALTER PUBLICATION supabase_realtime ADD TABLE messages;
 
--- Verify the table was added to the publication
+-- Add the doctor_patient_messages table to the realtime publication
+ALTER PUBLICATION supabase_realtime ADD TABLE doctor_patient_messages;
+
+-- Verify the tables were added to the publication
 DO $$
 BEGIN
     IF EXISTS (
-        SELECT 1 
-        FROM pg_publication_tables 
-        WHERE pubname = 'supabase_realtime' 
+        SELECT 1
+        FROM pg_publication_tables
+        WHERE pubname = 'supabase_realtime'
         AND tablename = 'messages'
     ) THEN
         RAISE NOTICE 'messages table is now enabled for realtime';
     ELSE
         RAISE EXCEPTION 'Failed to enable realtime for messages table';
     END IF;
+
+    IF EXISTS (
+        SELECT 1
+        FROM pg_publication_tables
+        WHERE pubname = 'supabase_realtime'
+        AND tablename = 'doctor_patient_messages'
+    ) THEN
+        RAISE NOTICE 'doctor_patient_messages table is now enabled for realtime';
+    ELSE
+        RAISE EXCEPTION 'Failed to enable realtime for doctor_patient_messages table';
+    END IF;
 END $$;
 
 -- Note: This migration enables realtime without requiring the Replication UI
--- The messages table will now broadcast INSERT/UPDATE/DELETE events automatically
+-- Both messages and doctor_patient_messages tables will now broadcast INSERT/UPDATE/DELETE events automatically

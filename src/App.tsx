@@ -47,7 +47,7 @@ const AuthRedirect: React.FC = () => {
           const onboardingComplete = user?.unsafeMetadata?.onboardingComplete as boolean;
 
           if (userRole && onboardingComplete) {
-            const defaultRoute = userRole === 'doctor' ? '/ai-chat' : '/dashboard/patient';
+            const defaultRoute = userRole === 'doctor' ? '/ai-chat' : '/ai-chat';
             console.log('🔄 AuthRedirect - Redirecting to default route:', defaultRoute);
             navigate(defaultRoute);
           } else {
@@ -70,7 +70,7 @@ const AuthRedirect: React.FC = () => {
         const onboardingComplete = user?.unsafeMetadata?.onboardingComplete as boolean;
 
         if (userRole && onboardingComplete) {
-          const defaultRoute = userRole === 'doctor' ? '/ai-chat' : '/dashboard/patient';
+          const defaultRoute = userRole === 'doctor' ? '/ai-chat' : '/ai-chat';
           console.log('🔄 AuthRedirect - Redirecting to default route:', defaultRoute);
           navigate(defaultRoute);
         } else {
@@ -137,7 +137,7 @@ const AppRoutes = () => {
     const currentPath = location.pathname;
     if (currentPath === '/' || currentPath === '') {
       console.log('🏥 Redirecting to dashboard');
-      return <Navigate to={userRole === 'doctor' ? '/ai-chat' : '/dashboard/patient'} replace />;
+      return <Navigate to={userRole === 'doctor' ? '/ai-chat' : '/ai-chat'} replace />;
     }
   }
 
@@ -178,7 +178,7 @@ const AppRoutes = () => {
       {/* Authenticated routes */}
       {user ? (
         <>
-          <Route path="/" element={<Navigate to={user.role === 'doctor' ? '/ai-chat' : '/dashboard'} replace />} />
+          <Route path="/" element={<Navigate to={user.role === 'doctor' ? '/ai-chat' : '/ai-chat'} replace />} />
           <Route path="/debug" element={
             <div className="p-8">
               <h1 className="text-2xl font-bold mb-4">Authentication Debug</h1>
@@ -206,7 +206,7 @@ const AppRoutes = () => {
               </div>
               <div className="mt-4">
                 <a href="/ai-chat" className="bg-blue-500 text-white px-4 py-2 rounded mr-2">Go to AI Chat</a>
-                <a href="/dashboard" className="bg-green-500 text-white px-4 py-2 rounded mr-2">Go to Dashboard</a>
+                {user.role === 'doctor' && <a href="/dashboard" className="bg-green-500 text-white px-4 py-2 rounded mr-2">Go to Dashboard</a>}
                 <a href="/onboarding/select-role" className="bg-purple-500 text-white px-4 py-2 rounded">Go to Role Selection</a>
               </div>
             </div>
@@ -217,9 +217,7 @@ const AppRoutes = () => {
               user.role === 'doctor' ? (
                 <Navigate to="/ai-chat" replace />
               ) : (
-                <DashboardLayout>
-                  <PatientDashboard />
-                </DashboardLayout>
+                <Navigate to="/ai-chat" replace />
               )
             }
           />
@@ -230,11 +228,7 @@ const AppRoutes = () => {
           <Route path="/auth-redirect" element={<AuthRedirect />} />
           <Route
             path="/dashboard/patient"
-            element={
-              <DashboardLayout>
-                <PatientDashboard />
-              </DashboardLayout>
-            }
+            element={<Navigate to="/ai-chat" replace />}
           />
           <Route
             path="/ai-chat"
