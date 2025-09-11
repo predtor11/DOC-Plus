@@ -44,8 +44,8 @@ const PatientDetail = () => {
             <p className="text-muted-foreground mb-4">
               Only doctors can view patient details.
             </p>
-            <Button onClick={() => navigate('/dashboard')}>
-              Go to Dashboard
+            <Button onClick={() => navigate('/ai-chat')}>
+              Go to AI Assistant
             </Button>
           </CardContent>
         </Card>

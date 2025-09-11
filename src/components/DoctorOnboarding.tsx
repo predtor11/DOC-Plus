@@ -108,23 +108,31 @@ const DoctorOnboarding = () => {
       }
 
       // Update Clerk user metadata with role and database mapping
+      console.log('🔄 Updating Clerk metadata...');
       await user?.update({
         unsafeMetadata: {
           ...user.unsafeMetadata,
           role: 'doctor',
-          intendedRole: 'doctor',
           onboardingComplete: true,
           doctorProfileId: data.id, // Store the doctor profile ID
         },
       });
+      console.log('✅ Clerk metadata updated successfully');
+      console.log('📝 New metadata:', user?.unsafeMetadata);
+
+      // Force reload Clerk user data to ensure metadata changes are reflected
+      console.log('🔄 Reloading Clerk user data...');
+      await user?.reload();
+      console.log('✅ Clerk user reloaded, new metadata:', user?.unsafeMetadata);
 
       toast({
         title: "Registration Complete!",
         description: "Welcome to Doc+, Dr. " + formData.name,
       });
 
-      // Redirect to dashboard
-      navigate('/dashboard');
+      // Navigate to AI Chat (doctor's main page)
+      console.log('🚀 Navigating to AI Chat...');
+      navigate('/ai-chat');
       
     } catch (error: any) {
       console.error('Error creating doctor profile:', error);

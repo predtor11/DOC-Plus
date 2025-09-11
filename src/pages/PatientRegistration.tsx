@@ -48,8 +48,8 @@ const PatientRegistration = () => {
             <p className="text-muted-foreground mb-4">
               Only doctors can register patients.
             </p>
-            <Link to="/dashboard">
-              <Button>Go to Dashboard</Button>
+            <Link to="/ai-chat">
+              <Button>Go to AI Assistant</Button>
             </Link>
           </CardContent>
         </Card>
