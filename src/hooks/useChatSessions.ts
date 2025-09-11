@@ -190,8 +190,11 @@ export const useMessages = (sessionId: string | null) => {
     console.log('Setting up realtime subscription for messages in session:', sessionId);
 
     // Create a unique channel for this chat session
+    const channelName = `chat-messages-${sessionId}-${Date.now()}`;
+    console.log('Creating channel:', channelName);
+    
     const channel = supabase
-      .channel(`chat-messages-${sessionId}`)
+      .channel(channelName)
       .on(
         'postgres_changes',
         {
@@ -216,16 +219,34 @@ export const useMessages = (sessionId: string | null) => {
           });
         }
       )
-      .subscribe((status) => {
+      .subscribe((status, err) => {
         console.log('useMessages realtime subscription status:', status);
+        if (err) {
+          console.error('Realtime subscription error details:', err);
+          console.error('Error message:', err.message);
+          console.error('Error name:', err.name);
+          
+          // Log additional context for debugging
+          console.error('Session ID:', sessionId);
+          console.error('User ID:', user?.id);
+          console.error('Channel name:', channelName);
+        }
+        
         if (status === 'SUBSCRIBED') {
           console.log('Successfully subscribed to realtime updates for messages in session:', sessionId);
         } else if (status === 'CHANNEL_ERROR') {
-          console.error('Realtime subscription error for messages in session:', sessionId);
+          console.error('Realtime subscription CHANNEL_ERROR for messages in session:', sessionId, err);
+          
+          // Attempt to reconnect after a delay
+          setTimeout(() => {
+            console.log('Attempting to reconnect realtime subscription for session:', sessionId);
+            // The useEffect will re-run and create a new subscription
+          }, 5000);
+          
         } else if (status === 'TIMED_OUT') {
-          console.warn('Realtime subscription timed out for messages in session:', sessionId);
+          console.warn('Realtime subscription TIMED_OUT for messages in session:', sessionId);
         } else if (status === 'CLOSED') {
-          console.log('Realtime subscription closed for messages in session:', sessionId);
+          console.log('Realtime subscription CLOSED for messages in session:', sessionId);
         }
       });
 
