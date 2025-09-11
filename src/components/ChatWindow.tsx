@@ -27,23 +27,28 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, onSessionUpdate, onNew
   const [newMessage, setNewMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showPatientList, setShowPatientList] = useState(false);
-  const [patientSearch, setPatientSearch] = useState('');
-  const [patients, setPatients] = useState<Patient[]>([]);
-  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
-  const [cursorPosition, setCursorPosition] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { user } = useAuth();
   const { toast } = useToast();
   const { messages, sendMessage, fetchMessages } = useMessages(session?.id || null);
 
+  // @ mention state - only for doctors in ai-doctor sessions
+  const isDoctorAIChat = user?.role === 'doctor' && session?.session_type === 'ai-doctor';
+  const [showPatientList, setShowPatientList] = useState(false);
+  const [patientSearch, setPatientSearch] = useState('');
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [cursorPosition, setCursorPosition] = useState(0);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // Fetch patients for @ mention
+  // Fetch patients for @ mention - only for doctors
   const fetchPatients = async (searchTerm: string = '') => {
+    if (!isDoctorAIChat) return;
+    
     try {
       let query = supabase.from('patients').select('*');
       
@@ -79,13 +84,15 @@ Emergency Contact: ${patient.emergency_contact_name || 'Not provided'} (${patien
 Address: ${patient.address || 'Not provided'}`;
   };
 
-  // Handle @ mention input
+  // Handle @ mention input - only for doctors
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     const cursorPos = e.target.selectionStart || 0;
     
     setNewMessage(value);
     setCursorPosition(cursorPos);
+    
+    if (!isDoctorAIChat) return;
     
     // Check if @ is typed
     const textBeforeCursor = value.substring(0, cursorPos);
@@ -102,8 +109,10 @@ Address: ${patient.address || 'Not provided'}`;
     }
   };
 
-  // Handle patient selection
+  // Handle patient selection - only for doctors
   const handlePatientSelect = (patient: Patient) => {
+    if (!isDoctorAIChat) return;
+    
     const textBeforeAt = newMessage.substring(0, newMessage.lastIndexOf('@'));
     const textAfterCursor = newMessage.substring(cursorPosition);
     const newText = `${textBeforeAt}@${patient.name} ${textAfterCursor}`;
@@ -125,12 +134,14 @@ Address: ${patient.address || 'Not provided'}`;
     scrollToBottom();
   }, [messages]);
 
-  // Clear selected patient when session changes
+  // Clear selected patient when session changes - only for doctors
   useEffect(() => {
-    setSelectedPatient(null);
-    setShowPatientList(false);
-    setPatientSearch('');
-  }, [session?.id]);
+    if (isDoctorAIChat) {
+      setSelectedPatient(null);
+      setShowPatientList(false);
+      setPatientSearch('');
+    }
+  }, [session?.id, isDoctorAIChat]);
 
   // Mark messages as read when session changes or new messages arrive
   useEffect(() => {
@@ -178,7 +189,7 @@ Address: ${patient.address || 'Not provided'}`;
       // Generate AI response if this is an AI session
       if (session.session_type.includes('ai')) {
         try {
-          const patientContext = selectedPatient ? getPatientContext(selectedPatient) : undefined;
+          const patientContext = (isDoctorAIChat && selectedPatient) ? getPatientContext(selectedPatient) : undefined;
           
           const aiResult = await OpenRouterService.generateDoctorResponse(
             messageContent,
@@ -423,8 +434,8 @@ Address: ${patient.address || 'Not provided'}`;
       {/* Message Input */}
       <div className="px-6 py-4 border-t bg-white relative">
         <div className="max-w-3xl mx-auto">
-          {/* Patient List Dropdown */}
-          {showPatientList && patients.length > 0 && (
+          {/* Patient List Dropdown - only for doctors */}
+          {isDoctorAIChat && showPatientList && patients.length > 0 && (
             <div className="absolute bottom-full mb-2 left-6 right-6 max-w-3xl mx-auto bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto z-10">
               {patients.map((patient) => (
                 <div
@@ -454,11 +465,11 @@ Address: ${patient.address || 'Not provided'}`;
               ref={inputRef}
               value={newMessage}
               onChange={handleInputChange}
-              placeholder="Type your message... (use @ to mention patients)"
+              placeholder={isDoctorAIChat ? "Type your message... (use @ to mention patients)" : "Type your message..."}
               onKeyPress={(e) => {
-                if (e.key === 'Enter' && !showPatientList) {
+                if (e.key === 'Enter' && (!isDoctorAIChat || !showPatientList)) {
                   handleSendMessage();
-                } else if (e.key === 'Escape') {
+                } else if (e.key === 'Escape' && isDoctorAIChat) {
                   setShowPatientList(false);
                 }
               }}
@@ -474,8 +485,8 @@ Address: ${patient.address || 'Not provided'}`;
             </Button>
           </div>
 
-          {/* Selected Patient Indicator */}
-          {selectedPatient && (
+          {/* Selected Patient Indicator - only for doctors */}
+          {isDoctorAIChat && selectedPatient && (
             <div className="mt-2 flex items-center space-x-2 text-sm text-gray-600">
               <span>Context: {selectedPatient.name}</span>
               <button
