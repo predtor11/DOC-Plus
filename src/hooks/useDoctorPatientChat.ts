@@ -28,6 +28,21 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
   const [messages, setMessages] = useState<DoctorPatientMessage[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // Early return if hook dependencies are not ready
+  if (!user) {
+    console.log('useDoctorPatientChat: User not available, returning default values');
+    return {
+      sessions: [],
+      messages: [],
+      loading: false,
+      fetchSessions: () => Promise.resolve(),
+      fetchMessages: () => Promise.resolve(),
+      createSession: () => Promise.resolve(null),
+      sendMessage: () => Promise.resolve(null),
+      markMessagesAsRead: () => Promise.resolve(),
+    };
+  }
+
   // Fetch all doctor-patient sessions for the current user
   const fetchSessions = async () => {
     if (!user?.id) return;
