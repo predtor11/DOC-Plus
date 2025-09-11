@@ -25,7 +25,7 @@ type Patient = {
   phone: string | null;
   medical_history: string | null;
   created_at: string;
-  user_id: string;
+  user_id: string | null; // Match database schema - can be null
 };
 
 type ChatSession = Database['public']['Tables']['chat_sessions']['Row'];
@@ -144,6 +144,14 @@ const Patients = () => {
         return;
       }
 
+      // Debug: Log patient data to identify missing user_ids
+      console.log('Fetched patients:', data?.map(p => ({
+        id: p.id,
+        name: p.name,
+        user_id: p.user_id,
+        hasUserId: !!p.user_id
+      })));
+
       setPatients(data || []);
     } catch (error) {
       console.error('Error fetching patients:', error);
@@ -257,9 +265,17 @@ const Patients = () => {
 
     // Check if patient has a valid user_id for chat
     if (!patient.user_id) {
+      console.error('Patient missing user_id:', {
+        patientId: patient.id,
+        patientName: patient.name,
+        userId: patient.user_id,
+        email: patient.email,
+        phone: patient.phone
+      });
+
       toast({
         title: "Cannot Start Chat",
-        description: "This patient account is not fully set up yet. Please complete the patient registration process.",
+        description: `${patient.name} needs to complete their account setup. They should log in to the patient portal and complete the registration process.`,
         variant: "destructive",
       });
       return;
@@ -323,8 +339,8 @@ const Patients = () => {
         // Transform the session data to match our DoctorPatientChatSession interface
         const transformedSession: DoctorPatientChatSession = {
           id: existingSession.id,
-          doctor_id: existingSession.participant_1_id || actualDoctorUserId,
-          patient_id: existingSession.participant_2_id || patient.user_id,
+          doctor_id: existingSession.doctor_id || actualDoctorUserId,
+          patient_id: existingSession.patient_id || patient.user_id,
           title: existingSession.title,
           last_message_at: existingSession.last_message_at,
           created_at: existingSession.created_at,
@@ -448,8 +464,8 @@ const Patients = () => {
         // Transform the session data to match our DoctorPatientChatSession interface
         const transformedSession: DoctorPatientChatSession = {
           id: newSession.id,
-          doctor_id: newSession.participant_1_id || actualDoctorUserId,
-          patient_id: newSession.participant_2_id || selectedPatient.user_id,
+          doctor_id: newSession.doctor_id || actualDoctorUserId,
+          patient_id: newSession.patient_id || selectedPatient.user_id,
           title: newSession.title,
           last_message_at: newSession.last_message_at,
           created_at: newSession.created_at,
