@@ -95,9 +95,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log('🚀 Setting up Supabase OAuth for Clerk user:', clerkUser.id);
 
-      // Get the JWT token from Clerk using the proper auth hook
-      const token = await getToken({ template: 'supabase' }) || await getToken();
-      console.log('🔑 Got Clerk JWT token:', token ? '***' + token.slice(-10) : 'null');
+      // Try to get the JWT token from Clerk (optional - fallback to profile lookup if it fails)
+      let token = null;
+      try {
+        token = await getToken({ template: 'supabase' }) || await getToken();
+        console.log('🔑 Got Clerk JWT token:', token ? '***' + token.slice(-10) : 'null');
+      } catch (tokenError) {
+        console.log('⚠️ JWT token retrieval failed (this is expected if no supabase template exists):', tokenError.message);
+        console.log('🔄 Continuing with profile lookup instead...');
+      }
 
       if (token) {
         // Set the JWT token in Supabase auth
@@ -117,7 +123,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSession(mockSession as any);
       }
 
-      // Start checking for user profile
+      // Start checking for user profile (this will work even without JWT token)
       setIsCheckingProfile(true);
       // Fetch user profile based on Clerk user ID
       await fetchUserProfileByClerkId(clerkUser.id);
