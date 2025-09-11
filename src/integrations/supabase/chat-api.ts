@@ -182,22 +182,56 @@ export class ChatAPI {
         };
       }
 
-      // First, get the session to determine the session type
-      const { data: session, error: sessionError } = await supabase
-        .from('chat_sessions')
-        .select('session_type')
-        .eq('id', sessionId)
-        .single();
+      // First, try to get the session from chat_sessions (AI chats)
+      let session = null;
+      let sessionError = null;
+      let isAiSession = false;
 
-      if (sessionError) {
-        console.error('Error fetching session:', sessionError);
-        return {
-          data: null,
-          error: { message: 'Failed to fetch session information', code: sessionError.code }
-        };
+      try {
+        const aiSessionResult = await supabase
+          .from('chat_sessions')
+          .select('session_type')
+          .eq('id', sessionId)
+          .single();
+
+        if (aiSessionResult.data) {
+          session = aiSessionResult.data;
+          isAiSession = session.session_type?.includes('ai') || false;
+          console.log('ChatAPI.sendMessage - Found AI session:', session.session_type, 'Session ID:', sessionId);
+        }
+      } catch (aiError) {
+        console.log('Session not found in chat_sessions, checking doctor_patient_chat_sessions...');
       }
 
-      const isAiSession = session?.session_type?.includes('ai') || false;
+      // If not found in chat_sessions, try doctor_patient_chat_sessions
+      if (!session) {
+        try {
+          const dpSessionResult = await supabase
+            .from('doctor_patient_chat_sessions')
+            .select('id, doctor_id, patient_id')
+            .eq('id', sessionId)
+            .single();
+
+          if (dpSessionResult.data) {
+            session = dpSessionResult.data;
+            isAiSession = false; // Doctor-patient sessions are not AI sessions
+            console.log('ChatAPI.sendMessage - Found doctor-patient session, Session ID:', sessionId);
+          } else {
+            sessionError = dpSessionResult.error;
+          }
+        } catch (dpError) {
+          sessionError = dpError;
+          console.error('Error fetching session from both tables:', dpError);
+        }
+      }
+
+      if (!session) {
+        console.error('Session not found in either table:', sessionError);
+        return {
+          data: null,
+          error: { message: 'Failed to fetch session information - session not found', code: sessionError?.code || 'SESSION_NOT_FOUND' }
+        };
+      }
       console.log('ChatAPI.sendMessage - Session type:', session?.session_type, 'Is AI session:', isAiSession, 'Session ID:', sessionId);
 
       const messageData = {
