@@ -184,7 +184,6 @@ export class ChatAPI {
 
       // First, try to get the session from chat_sessions (AI chats)
       let session = null;
-      let sessionError = null;
       let isAiSession = false;
 
       try {
@@ -200,6 +199,7 @@ export class ChatAPI {
           console.log('ChatAPI.sendMessage - Found AI session:', session.session_type, 'Session ID:', sessionId);
         }
       } catch (aiError) {
+        // This is expected for doctor-patient sessions, so don't log as error
         console.log('Session not found in chat_sessions, checking doctor_patient_chat_sessions...');
       }
 
@@ -217,19 +217,26 @@ export class ChatAPI {
             isAiSession = false; // Doctor-patient sessions are not AI sessions
             console.log('ChatAPI.sendMessage - Found doctor-patient session, Session ID:', sessionId);
           } else {
-            sessionError = dpSessionResult.error;
+            console.error('Session not found in either table:', dpSessionResult.error);
+            return {
+              data: null,
+              error: { message: 'Failed to fetch session information - session not found', code: dpSessionResult.error?.code || 'SESSION_NOT_FOUND' }
+            };
           }
         } catch (dpError) {
-          sessionError = dpError;
-          console.error('Error fetching session from both tables:', dpError);
+          console.error('Error fetching session from doctor_patient_chat_sessions:', dpError);
+          return {
+            data: null,
+            error: { message: 'Failed to fetch session information - session not found', code: dpError?.code || 'SESSION_NOT_FOUND' }
+          };
         }
       }
 
       if (!session) {
-        console.error('Session not found in either table:', sessionError);
+        console.error('Session not found in either table');
         return {
           data: null,
-          error: { message: 'Failed to fetch session information - session not found', code: sessionError?.code || 'SESSION_NOT_FOUND' }
+          error: { message: 'Failed to fetch session information - session not found', code: 'SESSION_NOT_FOUND' }
         };
       }
       console.log('ChatAPI.sendMessage - Session type:', session?.session_type, 'Is AI session:', isAiSession, 'Session ID:', sessionId);
