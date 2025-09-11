@@ -85,12 +85,12 @@ const DoctorOnboarding = () => {
         }
       }
 
-      // Create doctor profile in Supabase using Clerk user ID for both user_id and clerk_user_id
+      // Create doctor profile in Supabase using NULL for user_id and Clerk ID for clerk_user_id
       const { data, error } = await supabase
         .from('doctors')
         .insert({
-          user_id: clerkUserId, // Use Clerk user ID as the primary user_id
-          clerk_user_id: clerkUserId, // Also store in clerk_user_id for consistency
+          user_id: null, // Set to NULL since we're not using foreign key to auth.users
+          clerk_user_id: clerkUserId, // Use Clerk user ID as primary identifier
           username: uniqueUsername, // Use the unique username
           name: formData.name,
           registration_no: formData.registrationNo,

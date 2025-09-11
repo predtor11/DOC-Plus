@@ -35,14 +35,15 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
     try {
       setLoading(true);
       console.log('Fetching doctor-patient sessions for user:', user.id);
-      console.log('Using Clerk user ID for session lookup:', user.id);
+      console.log('Using database user_id for session lookup:', user.user_id || user.id);
 
       // For now, just use the regular chat_sessions table (skip doctor_patient_chat_sessions)
-      console.log('Using doctor_patient_chat_sessions table for doctor-patient sessions');
+      console.log('Using chat_sessions table for doctor-patient sessions (skipping doctor_patient_chat_sessions)');
       const { data, error } = await supabase
-        .from('doctor_patient_chat_sessions')
+        .from('chat_sessions')
         .select('*')
-        .or(`doctor_id.eq.${user.id},patient_id.eq.${user.id}`)
+        .eq('session_type', 'doctor-patient')
+        .or(`participant_1_id.eq.${user.user_id || user.id},participant_2_id.eq.${user.user_id || user.id}`)
         .order('last_message_at', { ascending: false, nullsFirst: false });
 
       if (error) {
@@ -54,8 +55,8 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
         // Transform data to match our interface if needed
         const transformedSessions = (data || []).map(session => ({
           id: session.id,
-          doctor_id: session.doctor_id, // Use doctor_id directly
-          patient_id: session.patient_id, // Use patient_id directly
+          doctor_id: session.participant_1_id, // For regular chat_sessions, use participant_1_id as doctor
+          patient_id: session.participant_2_id, // For regular chat_sessions, use participant_2_id as patient
           title: session.title,
           last_message_at: session.last_message_at,
           created_at: session.created_at,
@@ -84,9 +85,9 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
       console.log('Fetching doctor-patient messages for session:', sessionId);
 
       // For now, just use the regular messages table (skip doctor_patient_messages)
-      console.log('Using doctor_patient_messages table for doctor-patient messages');
+      console.log('Using messages table for doctor-patient messages (skipping doctor_patient_messages)');
       const { data, error } = await supabase
-        .from('doctor_patient_messages')
+        .from('messages')
         .select('*')
         .eq('session_id', sessionId)
         .order('created_at', { ascending: true });
@@ -138,8 +139,8 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
       // Transform the data to match our interface if needed
       const transformedSession = {
         id: data.id,
-        doctor_id: data.doctor_id || doctorId,
-        patient_id: data.patient_id || patientId,
+        doctor_id: data.participant_1_id || doctorId,
+        patient_id: data.participant_2_id || patientId,
         title: data.title,
         last_message_at: data.last_message_at,
         created_at: data.created_at,
@@ -165,19 +166,10 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
 
     try {
       setLoading(true);
-      const senderId = user.id; // Use Clerk user ID for sender_id
-      console.log('Sending doctor-patient message via ChatAPI:', {
-        sessionId,
-        content,
-        senderId,
-        userAuthState: {
-          id: user.id,
-          user_id: user.user_id
-        }
-      });
+      console.log('Sending doctor-patient message via ChatAPI:', { sessionId, content, senderId: user.id });
 
       // Use ChatAPI which has proper fallback logic
-      const { data, error } = await ChatAPI.sendMessage(sessionId, content, senderId);
+      const { data, error } = await ChatAPI.sendMessage(sessionId, content, user.id);
 
       if (error) {
         console.error('Error sending doctor-patient message via ChatAPI:', error);
@@ -214,9 +206,9 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
       console.log('Marking doctor-patient messages as read:', { sessionId, userId: user.id });
 
       // For now, just use the regular messages table (skip doctor_patient_messages)
-      console.log('Using doctor_patient_messages table for marking doctor-patient messages as read');
+      console.log('Using messages table for marking doctor-patient messages as read');
       const { error } = await supabase
-        .from('doctor_patient_messages')
+        .from('messages')
         .update({ is_read: true })
         .eq('session_id', sessionId)
         .neq('sender_id', user.id)
@@ -249,91 +241,6 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
   useEffect(() => {
     if (sessionId) {
       fetchMessages();
-
-      // Set up real-time subscription for new messages
-      console.log('Setting up real-time subscription for session:', sessionId);
-      console.log('Current user auth state:', {
-        userId: user?.id,
-        user_id: user?.user_id
-      });
-
-      const channel = supabase
-        .channel(`messages-${sessionId}`)
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'doctor_patient_messages',
-            filter: `session_id=eq.${sessionId}`,
-          },
-          (payload) => {
-            console.log('🎉 New message received via real-time for session', sessionId, ':', payload);
-            console.log('Message data:', {
-              id: payload.new.id,
-              session_id: payload.new.session_id,
-              sender_id: payload.new.sender_id,
-              content: payload.new.content,
-              is_read: payload.new.is_read,
-              created_at: payload.new.created_at
-            });
-            console.log('Current user ID:', user?.id);
-
-            const newMessage = {
-              id: payload.new.id,
-              session_id: payload.new.session_id,
-              sender_id: payload.new.sender_id,
-              content: payload.new.content,
-              is_read: payload.new.is_read || false,
-              created_at: payload.new.created_at
-            };
-
-            // Add the new message to the local state
-            setMessages(prev => {
-              // Check if message already exists to avoid duplicates
-              const messageExists = prev.some(msg => msg.id === newMessage.id);
-              if (messageExists) {
-                console.log('Message already exists, skipping duplicate');
-                return prev;
-              }
-              console.log('Adding new message to state:', newMessage);
-              return [...prev, newMessage];
-            });
-          }
-        )
-        .subscribe((status, err) => {
-          console.log('Real-time subscription status for session', sessionId, ':', status);
-          if (err) {
-            console.error('Real-time subscription error:', err);
-            console.error('Error details:', {
-              message: err.message,
-              name: err.name,
-              stack: err.stack
-            });
-          }
-          if (status === 'SUBSCRIBED') {
-            console.log('✅ Successfully subscribed to real-time updates for session', sessionId);
-          } else if (status === 'CHANNEL_ERROR') {
-            console.error('❌ Real-time subscription failed for session', sessionId);
-            console.error('Channel error details:', err);
-            // Try to reconnect after a delay
-            setTimeout(() => {
-              console.log('🔄 Attempting to reconnect real-time subscription...');
-              supabase.removeChannel(channel);
-              // The useEffect will recreate the subscription
-            }, 5000);
-          } else if (status === 'TIMED_OUT') {
-            console.error('❌ Real-time subscription timed out for session', sessionId);
-          } else if (status === 'CLOSED') {
-            console.log('ℹ️ Real-time subscription closed for session', sessionId);
-          }
-        });
-
-      // Cleanup subscription on unmount or session change
-      return () => {
-        console.log('Cleaning up real-time subscription for session:', sessionId);
-        supabase.removeChannel(channel);
-      };
     } else {
       setMessages([]);
     }

@@ -37,9 +37,7 @@ ALTER TABLE public.doctor_patient_chat_sessions ALTER COLUMN doctor_id TYPE TEXT
 ALTER TABLE public.doctor_patient_chat_sessions ALTER COLUMN patient_id TYPE TEXT;
 ALTER TABLE public.doctor_patient_messages ALTER COLUMN sender_id TYPE TEXT;
 
--- Temporarily disable RLS for debugging (REMOVE THIS AFTER TESTING)
-ALTER TABLE public.doctor_patient_messages DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.doctor_patient_chat_sessions DISABLE ROW LEVEL SECURITY;
+-- Create new RLS policies that work with Clerk JWT tokens
 CREATE POLICY "Doctors and patients can view their chat sessions"
 ON public.doctor_patient_chat_sessions
 FOR SELECT
