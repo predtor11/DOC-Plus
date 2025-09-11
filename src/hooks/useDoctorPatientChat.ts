@@ -38,12 +38,11 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
       console.log('Using database user_id for session lookup:', user.user_id || user.id);
 
       // For now, just use the regular chat_sessions table (skip doctor_patient_chat_sessions)
-      console.log('Using chat_sessions table for doctor-patient sessions (skipping doctor_patient_chat_sessions)');
+      console.log('Using doctor_patient_chat_sessions table for doctor-patient sessions');
       const { data, error } = await supabase
-        .from('chat_sessions')
+        .from('doctor_patient_chat_sessions')
         .select('*')
-        .eq('session_type', 'doctor-patient')
-        .or(`participant_1_id.eq.${user.user_id || user.id},participant_2_id.eq.${user.user_id || user.id}`)
+        .or(`doctor_id.eq.${user.user_id || user.id},patient_id.eq.${user.user_id || user.id}`)
         .order('last_message_at', { ascending: false, nullsFirst: false });
 
       if (error) {
@@ -55,8 +54,8 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
         // Transform data to match our interface if needed
         const transformedSessions = (data || []).map(session => ({
           id: session.id,
-          doctor_id: session.participant_1_id, // For regular chat_sessions, use participant_1_id as doctor
-          patient_id: session.participant_2_id, // For regular chat_sessions, use participant_2_id as patient
+          doctor_id: session.doctor_id, // Use doctor_id directly
+          patient_id: session.patient_id, // Use patient_id directly
           title: session.title,
           last_message_at: session.last_message_at,
           created_at: session.created_at,
@@ -85,9 +84,9 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
       console.log('Fetching doctor-patient messages for session:', sessionId);
 
       // For now, just use the regular messages table (skip doctor_patient_messages)
-      console.log('Using messages table for doctor-patient messages (skipping doctor_patient_messages)');
+      console.log('Using doctor_patient_messages table for doctor-patient messages');
       const { data, error } = await supabase
-        .from('messages')
+        .from('doctor_patient_messages')
         .select('*')
         .eq('session_id', sessionId)
         .order('created_at', { ascending: true });
@@ -139,8 +138,8 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
       // Transform the data to match our interface if needed
       const transformedSession = {
         id: data.id,
-        doctor_id: data.participant_1_id || doctorId,
-        patient_id: data.participant_2_id || patientId,
+        doctor_id: data.doctor_id || doctorId,
+        patient_id: data.patient_id || patientId,
         title: data.title,
         last_message_at: data.last_message_at,
         created_at: data.created_at,
@@ -215,9 +214,9 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
       console.log('Marking doctor-patient messages as read:', { sessionId, userId: user.id });
 
       // For now, just use the regular messages table (skip doctor_patient_messages)
-      console.log('Using messages table for marking doctor-patient messages as read');
+      console.log('Using doctor_patient_messages table for marking doctor-patient messages as read');
       const { error } = await supabase
-        .from('messages')
+        .from('doctor_patient_messages')
         .update({ is_read: true })
         .eq('session_id', sessionId)
         .neq('sender_id', user.id)
@@ -265,7 +264,7 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
           {
             event: 'INSERT',
             schema: 'public',
-            table: 'messages',
+            table: 'doctor_patient_messages',
             filter: `session_id=eq.${sessionId}`,
           },
           (payload) => {

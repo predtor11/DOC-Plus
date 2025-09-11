@@ -3,6 +3,8 @@ import type { Database } from './types';
 
 type ChatSession = Database['public']['Tables']['chat_sessions']['Row'];
 type Message = Database['public']['Tables']['messages']['Row'];
+type DoctorPatientChatSession = Database['public']['Tables']['doctor_patient_chat_sessions']['Row'];
+type DoctorPatientMessage = Database['public']['Tables']['doctor_patient_messages']['Row'];
 
 export interface ChatAPIError {
   message: string;
@@ -42,9 +44,9 @@ export class ChatAPI {
   }
 
   /**
-   * Fetch chat session between doctor and patient
+   * Fetch doctor-patient chat session between doctor and patient
    */
-  static async fetchDoctorPatientSession(doctorId: string, patientId: string): Promise<{ data: ChatSession | null; error: ChatAPIError | null }> {
+  static async fetchDoctorPatientSession(doctorId: string, patientId: string): Promise<{ data: DoctorPatientChatSession | null; error: ChatAPIError | null }> {
     try {
       // Validate input parameters
       if (!doctorId || !patientId) {
@@ -56,13 +58,12 @@ export class ChatAPI {
 
       console.log('Fetching doctor-patient chat session for:', { doctorId, patientId });
 
-      // Skip the problematic doctor_patient_chat_sessions table and go straight to the working chat_sessions table
-      console.log('Using chat_sessions table for doctor-patient sessions (skipping problematic doctor_patient_chat_sessions)');
+      // Use the dedicated doctor_patient_chat_sessions table
+      console.log('Using doctor_patient_chat_sessions table for doctor-patient sessions');
       const { data, error } = await supabase
-        .from('chat_sessions')
+        .from('doctor_patient_chat_sessions')
         .select('*')
-        .eq('session_type', 'doctor-patient')
-        .or(`and(participant_1_id.eq.${doctorId},participant_2_id.eq.${patientId}),and(participant_1_id.eq.${patientId},participant_2_id.eq.${doctorId})`)
+        .or(`and(doctor_id.eq.${doctorId},patient_id.eq.${patientId}),and(doctor_id.eq.${patientId},patient_id.eq.${doctorId})`)
         .order('created_at', { ascending: false })
         .limit(1);
 
@@ -76,7 +77,7 @@ export class ChatAPI {
 
       console.log('Chat session fetch result:', { data: !!data, count: data?.length });
 
-      return { data: data?.[0] as ChatSession || null, error: null };
+      return { data: data?.[0] as DoctorPatientChatSession || null, error: null };
     } catch (err) {
       console.error('Unexpected error fetching chat session:', err);
       return {
@@ -87,9 +88,9 @@ export class ChatAPI {
   }
 
   /**
-   * Create a new chat session between doctor and patient (or find existing one)
+   * Create a new doctor-patient chat session (or find existing one)
    */
-  static async createDoctorPatientSession(doctorId: string, patientId: string, title?: string): Promise<{ data: ChatSession | null; error: ChatAPIError | null }> {
+  static async createDoctorPatientSession(doctorId: string, patientId: string, title?: string): Promise<{ data: DoctorPatientChatSession | null; error: ChatAPIError | null }> {
     try {
       // Validate input parameters
       if (!doctorId || !patientId) {
@@ -108,16 +109,15 @@ export class ChatAPI {
 
       console.log('Creating/finding doctor-patient chat session with data:', { doctorId, patientId, title });
 
-      // Skip the problematic doctor_patient_chat_sessions table and go straight to the working chat_sessions table
-      console.log('Using chat_sessions table for doctor-patient session creation (skipping problematic doctor_patient_chat_sessions)');
+      // Use the dedicated doctor_patient_chat_sessions table
+      console.log('Using doctor_patient_chat_sessions table for doctor-patient session creation');
 
       // First, try to find an existing session between these users
       console.log('Checking for existing session between doctor and patient...');
       const { data: existingSessions, error: findError } = await supabase
-        .from('chat_sessions')
+        .from('doctor_patient_chat_sessions')
         .select('*')
-        .eq('session_type', 'doctor-patient')
-        .or(`and(participant_1_id.eq.${doctorId},participant_2_id.eq.${patientId}),and(participant_1_id.eq.${patientId},participant_2_id.eq.${doctorId})`)
+        .or(`and(doctor_id.eq.${doctorId},patient_id.eq.${patientId}),and(doctor_id.eq.${patientId},patient_id.eq.${doctorId})`)
         .order('created_at', { ascending: false })
         .limit(1);
 
@@ -131,20 +131,19 @@ export class ChatAPI {
 
       if (existingSessions && existingSessions.length > 0) {
         console.log('Found existing session, returning it:', existingSessions[0].id);
-        return { data: existingSessions[0] as ChatSession, error: null };
+        return { data: existingSessions[0] as DoctorPatientChatSession, error: null };
       }
 
       console.log('No existing session found, creating new one...');
 
       const sessionData = {
-        session_type: 'doctor-patient' as const,
-        participant_1_id: doctorId,
-        participant_2_id: patientId,
+        doctor_id: doctorId,
+        patient_id: patientId,
         title: title || 'Doctor-Patient Chat',
       };
 
       const { data, error } = await supabase
-        .from('chat_sessions')
+        .from('doctor_patient_chat_sessions')
         .insert(sessionData)
         .select()
         .single();
@@ -159,7 +158,7 @@ export class ChatAPI {
 
       console.log('Chat session created successfully:', data);
 
-      return { data: data as ChatSession, error: null };
+      return { data: data as DoctorPatientChatSession, error: null };
     } catch (err) {
       console.error('Unexpected error creating chat session:', err);
       return {
@@ -172,7 +171,7 @@ export class ChatAPI {
   /**
    * Send a message in a chat session
    */
-  static async sendMessage(sessionId: string, content: string, senderId: string, isAiMessage: boolean = false): Promise<{ data: Message | null; error: ChatAPIError | null }> {
+  static async sendMessage(sessionId: string, content: string, senderId: string, isAiMessage: boolean = false): Promise<{ data: Message | DoctorPatientMessage | null; error: ChatAPIError | null }> {
     try {
       // Validate message content
       const validation = this.validateMessageContent(content);
@@ -232,17 +231,17 @@ export class ChatAPI {
         error = result.error;
         console.log('Messages table insert result:', { data: !!data, error: error?.message });
       } else {
-        // For doctor-patient sessions, use the regular messages table (skip doctor_patient_messages for now)
-        console.log('Using messages table for doctor-patient session (skipping doctor_patient_messages), sessionId:', sessionId);
+        // For doctor-patient sessions, use the dedicated doctor_patient_messages table
+        console.log('Using doctor_patient_messages table for doctor-patient session, sessionId:', sessionId);
         const result = await supabase
-          .from('messages')
-          .insert(messageData)
+          .from('doctor_patient_messages')
+          .insert(doctorPatientMessageData)
           .select()
           .single();
 
         data = result.data;
         error = result.error;
-        console.log('Messages table insert result for doctor-patient:', { data: !!data, error: error?.message });
+        console.log('Doctor-patient messages table insert result:', { data: !!data, error: error?.message });
       }
 
       if (error) {
