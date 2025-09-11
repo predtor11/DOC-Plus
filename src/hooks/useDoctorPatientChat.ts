@@ -244,6 +244,11 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
 
       // Set up real-time subscription for new messages
       console.log('Setting up real-time subscription for session:', sessionId);
+      console.log('Current user auth state:', {
+        userId: user?.id,
+        authUserId: user?.auth_user_id
+      });
+
       const channel = supabase
         .channel(`messages-${sessionId}`)
         .on(
@@ -258,6 +263,7 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
             console.log('🎉 New message received via real-time for session', sessionId, ':', payload);
             console.log('Message sender_id:', payload.new.sender_id);
             console.log('Current user id:', user?.auth_user_id || user?.id);
+            console.log('Is message from current user?', (payload.new.sender_id === (user?.auth_user_id || user?.id)));
 
             const newMessage = {
               id: payload.new.id,
@@ -281,8 +287,16 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
             });
           }
         )
-        .subscribe((status) => {
+        .subscribe((status, err) => {
           console.log('Real-time subscription status for session', sessionId, ':', status);
+          if (err) {
+            console.error('Real-time subscription error:', err);
+          }
+          if (status === 'SUBSCRIBED') {
+            console.log('✅ Successfully subscribed to real-time updates for session', sessionId);
+          } else if (status === 'CHANNEL_ERROR') {
+            console.error('❌ Real-time subscription failed for session', sessionId);
+          }
         });
 
       // Cleanup subscription on unmount or session change
