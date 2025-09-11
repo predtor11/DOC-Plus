@@ -28,7 +28,7 @@ const handler = async (req: Request): Promise<Response> => {
     console.log('Sending temporary password email to:', patientEmail);
 
     const emailResponse = await resend.emails.send({
-      from: "Doc+ <onboarding@resend.dev>",
+      from: "Doc+ <noreply@barve.me>",
       to: [patientEmail],
       subject: "Welcome to Doc+ - Your Temporary Login Credentials",
       html: `
