@@ -167,7 +167,9 @@ export const useMessages = (sessionId: string | null) => {
       }
 
       console.log('Message inserted successfully:', data);
-      setMessages(prev => [...prev, data]);
+      // Don't add to local state immediately - let real-time subscription handle it
+      // This prevents duplicate messages and ensures real-time delivery works properly
+      // setMessages(prev => [...prev, data]);
       return data;
     } catch (error) {
       console.error('Error sending message:', error);
@@ -185,9 +187,12 @@ export const useMessages = (sessionId: string | null) => {
 
   // Real-time subscription for messages
   useEffect(() => {
-    if (!sessionId) return;
+    if (!sessionId) {
+      console.log('useMessages: No sessionId provided, skipping real-time subscription setup');
+      return;
+    }
 
-    console.log('Setting up real-time subscription for messages in session:', sessionId);
+    console.log('useMessages: Setting up real-time subscription for messages in session:', sessionId);
 
     const channel = supabase
       .channel(`messages:${sessionId}`)
@@ -200,11 +205,15 @@ export const useMessages = (sessionId: string | null) => {
           filter: `session_id=eq.${sessionId}`,
         },
         (payload) => {
-          console.log('New message received in useMessages:', payload);
+          console.log('useMessages: Real-time new message received:', payload);
           setMessages(prev => {
             // Check if message already exists to avoid duplicates
             const exists = prev.some(msg => msg.id === payload.new.id);
-            if (exists) return prev;
+            if (exists) {
+              console.log('useMessages: Message already exists, skipping duplicate');
+              return prev;
+            }
+            console.log('useMessages: Adding new message to messages array');
             return [...prev, payload.new as Message];
           });
         }
@@ -218,7 +227,7 @@ export const useMessages = (sessionId: string | null) => {
           filter: `session_id=eq.${sessionId}`,
         },
         (payload) => {
-          console.log('Message updated in useMessages:', payload);
+          console.log('useMessages: Message updated:', payload);
           setMessages(prev =>
             prev.map(msg =>
               msg.id === payload.new.id
@@ -228,10 +237,12 @@ export const useMessages = (sessionId: string | null) => {
           );
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('useMessages: Real-time subscription status:', status);
+      });
 
     return () => {
-      console.log('Cleaning up real-time subscription for messages in session:', sessionId);
+      console.log('useMessages: Cleaning up real-time subscription for messages in session:', sessionId);
       supabase.removeChannel(channel);
     };
   }, [sessionId]);

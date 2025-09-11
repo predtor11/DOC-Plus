@@ -43,7 +43,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, onSessionUpdate, onNew
   useEffect(() => {
     if (session?.id && user?.id && messages.length > 0) {
       const markAsRead = async () => {
-        const { error } = await ChatAPI.markMessagesAsRead(session.id, user.user_id);
+        const { error } = await ChatAPI.markMessagesAsRead(session.id, user.auth_user_id || user.id);
         if (error) {
         }
       };

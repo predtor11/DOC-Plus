@@ -2,7 +2,6 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-route
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import DashboardLayout from "./components/DashboardLayout";
 import DoctorDashboard from "./pages/DoctorDashboard";
-import PatientDashboard from "./pages/PatientDashboard";
 import AIChat from "./pages/AIChat";
 import DoctorChat from "./pages/DoctorChat";
 import PatientDoctorChat from "./pages/PatientDoctorChat";
@@ -87,7 +86,7 @@ const AppRoutes = () => {
             path="/dashboard"
             element={
               <DashboardLayout>
-                {user.role === 'doctor' ? <DoctorDashboard /> : <PatientDashboard />}
+                {user.role === 'doctor' ? <DoctorDashboard /> : <AIChat />}
               </DashboardLayout>
             }
           />
