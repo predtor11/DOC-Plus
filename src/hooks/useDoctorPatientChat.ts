@@ -241,6 +241,48 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
   useEffect(() => {
     if (sessionId) {
       fetchMessages();
+
+      // Set up real-time subscription for new messages
+      console.log('Setting up real-time subscription for session:', sessionId);
+      const channel = supabase
+        .channel(`messages-${sessionId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'messages',
+            filter: `session_id=eq.${sessionId}`,
+          },
+          (payload) => {
+            console.log('New message received via real-time:', payload);
+            const newMessage = {
+              id: payload.new.id,
+              session_id: payload.new.session_id,
+              sender_id: payload.new.sender_id,
+              content: payload.new.content,
+              is_read: payload.new.is_read || false,
+              created_at: payload.new.created_at
+            };
+
+            // Add the new message to the local state
+            setMessages(prev => {
+              // Check if message already exists to avoid duplicates
+              const messageExists = prev.some(msg => msg.id === newMessage.id);
+              if (messageExists) {
+                return prev;
+              }
+              return [...prev, newMessage];
+            });
+          }
+        )
+        .subscribe();
+
+      // Cleanup subscription on unmount or session change
+      return () => {
+        console.log('Cleaning up real-time subscription for session:', sessionId);
+        supabase.removeChannel(channel);
+      };
     } else {
       setMessages([]);
     }
