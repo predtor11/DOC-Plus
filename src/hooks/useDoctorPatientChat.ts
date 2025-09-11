@@ -246,6 +246,67 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
     }
   }, [sessionId]);
 
+  // Real-time subscription for messages
+  useEffect(() => {
+    if (!sessionId) return;
+
+    console.log('Setting up real-time subscription for session:', sessionId);
+
+    const channel = supabase
+      .channel(`messages:${sessionId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `session_id=eq.${sessionId}`,
+        },
+        (payload) => {
+          console.log('New message received:', payload);
+          const newMessage = {
+            id: payload.new.id,
+            session_id: payload.new.session_id,
+            sender_id: payload.new.sender_id,
+            content: payload.new.content,
+            is_read: payload.new.is_read || false,
+            created_at: payload.new.created_at
+          };
+          setMessages(prev => {
+            // Check if message already exists to avoid duplicates
+            const exists = prev.some(msg => msg.id === newMessage.id);
+            if (exists) return prev;
+            return [...prev, newMessage];
+          });
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'messages',
+          filter: `session_id=eq.${sessionId}`,
+        },
+        (payload) => {
+          console.log('Message updated:', payload);
+          setMessages(prev =>
+            prev.map(msg =>
+              msg.id === payload.new.id
+                ? { ...msg, is_read: payload.new.is_read }
+                : msg
+            )
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      console.log('Cleaning up real-time subscription for session:', sessionId);
+      supabase.removeChannel(channel);
+    };
+  }, [sessionId]);
+
   return {
     sessions,
     messages,

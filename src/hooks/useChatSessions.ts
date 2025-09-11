@@ -183,6 +183,59 @@ export const useMessages = (sessionId: string | null) => {
     }
   }, [sessionId]);
 
+  // Real-time subscription for messages
+  useEffect(() => {
+    if (!sessionId) return;
+
+    console.log('Setting up real-time subscription for messages in session:', sessionId);
+
+    const channel = supabase
+      .channel(`messages:${sessionId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `session_id=eq.${sessionId}`,
+        },
+        (payload) => {
+          console.log('New message received in useMessages:', payload);
+          setMessages(prev => {
+            // Check if message already exists to avoid duplicates
+            const exists = prev.some(msg => msg.id === payload.new.id);
+            if (exists) return prev;
+            return [...prev, payload.new as Message];
+          });
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'messages',
+          filter: `session_id=eq.${sessionId}`,
+        },
+        (payload) => {
+          console.log('Message updated in useMessages:', payload);
+          setMessages(prev =>
+            prev.map(msg =>
+              msg.id === payload.new.id
+                ? { ...msg, ...payload.new } as Message
+                : msg
+            )
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      console.log('Cleaning up real-time subscription for messages in session:', sessionId);
+      supabase.removeChannel(channel);
+    };
+  }, [sessionId]);
+
   return {
     messages,
     loading,
