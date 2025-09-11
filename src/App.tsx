@@ -27,42 +27,72 @@ const queryClient = new QueryClient();
 
 // AuthRedirect component to handle post-authentication redirects
 const AuthRedirect: React.FC = () => {
-  const { user } = useClerk();
+  const { user, loaded } = useClerk();
   const location = useLocation();
   const navigate = useNavigate();
 
   React.useEffect(() => {
-    if (user) {
-      // If user is authenticated, check if there's a redirect in the URL
-      const searchParams = new URLSearchParams(location.search);
-      const redirectTo = searchParams.get('redirect');
+    console.log('🔄 AuthRedirect - Effect triggered:', { user, loaded, location: location.pathname + location.search });
 
-      if (redirectTo) {
-        // If there's a specific redirect, use it
-        navigate(redirectTo);
+    if (loaded) {
+      if (user) {
+        // User is authenticated, check for redirect parameters
+        const searchParams = new URLSearchParams(location.search);
+
+        // Check for Clerk handshake completion
+        if (searchParams.has('__clerk_handshake')) {
+          console.log('🔄 AuthRedirect - Clerk handshake detected, authentication completed');
+          // Clerk has completed authentication, now redirect appropriately
+          const userRole = user?.unsafeMetadata?.role as 'doctor' | 'patient' | undefined;
+          const onboardingComplete = user?.unsafeMetadata?.onboardingComplete as boolean;
+
+          if (userRole && onboardingComplete) {
+            const defaultRoute = userRole === 'doctor' ? '/ai-chat' : '/dashboard/patient';
+            console.log('🔄 AuthRedirect - Redirecting to default route:', defaultRoute);
+            navigate(defaultRoute);
+          } else {
+            console.log('🔄 AuthRedirect - Redirecting to role selection');
+            navigate('/onboarding/select-role');
+          }
+          return;
+        }
+
+        // Check for custom redirect parameter
+        const redirectTo = searchParams.get('redirect');
+        if (redirectTo) {
+          console.log('🔄 AuthRedirect - Redirecting to:', redirectTo);
+          navigate(redirectTo);
+          return;
+        }
+
+        // Default redirect based on user role
+        const userRole = user?.unsafeMetadata?.role as 'doctor' | 'patient' | undefined;
+        const onboardingComplete = user?.unsafeMetadata?.onboardingComplete as boolean;
+
+        if (userRole && onboardingComplete) {
+          const defaultRoute = userRole === 'doctor' ? '/ai-chat' : '/dashboard/patient';
+          console.log('🔄 AuthRedirect - Redirecting to default route:', defaultRoute);
+          navigate(defaultRoute);
+        } else {
+          console.log('🔄 AuthRedirect - Redirecting to role selection');
+          navigate('/onboarding/select-role');
+        }
       } else {
-        // Otherwise, redirect to the default authenticated route
-        navigate('/');
+        // User is not authenticated, redirect to sign-in
+        console.log('🔄 AuthRedirect - User not authenticated, redirecting to sign-in');
+        navigate('/onboarding/select-role');
       }
     }
-  }, [user, location, navigate]);
+  }, [user, loaded, location, navigate]);
 
-  if (!user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Completing sign in...</p>
-        </div>
-      </div>
-    );
-  }
-
+  // Show loading while Clerk processes authentication
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="text-center">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary mx-auto mb-4"></div>
-        <p className="text-muted-foreground">Redirecting...</p>
+        <p className="text-muted-foreground">
+          {user ? 'Completing sign in...' : 'Redirecting...'}
+        </p>
       </div>
     </div>
   );
@@ -197,6 +227,7 @@ const AppRoutes = () => {
             path="/dashboard/doctor"
             element={<Navigate to="/ai-chat" replace />}
           />
+          <Route path="/auth-redirect" element={<AuthRedirect />} />
           <Route
             path="/dashboard/patient"
             element={
@@ -331,7 +362,6 @@ const AppContent = () => {
                 <SignUp
                   routing="virtual"
                   signInUrl="/"
-                  redirectUrl={window.location.pathname + window.location.search}
                   appearance={{
                     elements: {
                       formButtonPrimary: 'bg-blue-600 hover:bg-blue-700',
@@ -354,7 +384,6 @@ const AppContent = () => {
                 <SignIn
                   routing="virtual"
                   signUpUrl="/sign-up"
-                  redirectUrl={window.location.pathname + window.location.search}
                   appearance={{
                     elements: {
                       formButtonPrimary: 'bg-blue-600 hover:bg-blue-700',
@@ -378,7 +407,6 @@ const AppContent = () => {
                 <SignIn
                   routing="virtual"
                   signUpUrl="/sign-up"
-                  redirectUrl="/auth-redirect"
                   appearance={{
                     elements: {
                       formButtonPrimary: 'bg-blue-600 hover:bg-blue-700',

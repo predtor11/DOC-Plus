@@ -17,6 +17,8 @@ createRoot(document.getElementById("root")!).render(
     appearance={{
       baseTheme: undefined,
     }}
+    afterSignInUrl="/auth-redirect"
+    afterSignUpUrl="/auth-redirect"
   >
     <App />
   </ClerkProvider>
