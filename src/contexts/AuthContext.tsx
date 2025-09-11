@@ -52,6 +52,7 @@ interface AuthContextType {
   ) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   isLoading: boolean;
+  isCheckingProfile: boolean;
   setUser: (user: AuthUser | null) => void;
 }
 
@@ -63,6 +64,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<AuthUser | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isCheckingProfile, setIsCheckingProfile] = useState(false);
 
   useEffect(() => {
     console.log('🔄 AuthProvider useEffect triggered:', {
@@ -84,6 +86,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(null);
       setSession(null);
       setIsLoading(false);
+      setIsCheckingProfile(false);
     }
   }, [clerkUser, isClerkLoaded]);
 
@@ -113,12 +116,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSession(mockSession as any);
       }
 
+      // Start checking for user profile
+      setIsCheckingProfile(true);
       // Fetch user profile based on Clerk user ID
       await fetchUserProfileByClerkId(clerkUser.id);
 
     } catch (error) {
       console.error('❌ Error setting up Supabase OAuth:', error);
       // Even if OAuth setup fails, try to fetch profile
+      setIsCheckingProfile(true);
       await fetchUserProfileByClerkId(clerkUser.id);
     }
   };
@@ -179,6 +185,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(null);
     } finally {
       setIsLoading(false);
+      setIsCheckingProfile(false);
     }
   };
 
@@ -216,6 +223,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.log('🔄 Setting user data:', userData);
           setUser(userData);
           setIsLoading(false);
+          setIsCheckingProfile(false);
           return;
         }
       } catch (error) {
@@ -249,6 +257,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.log('🔄 Setting user data:', userData);
           setUser(userData);
           setIsLoading(false);
+          setIsCheckingProfile(false);
           return;
         }
       } catch (error) {
@@ -282,6 +291,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.log('🔄 Setting user data:', userData);
           setUser(userData);
           setIsLoading(false);
+          setIsCheckingProfile(false);
           return;
         }
       } catch (error) {
@@ -317,6 +327,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.log('🔄 Setting user data:', userData);
             setUser(userData);
             setIsLoading(false);
+            setIsCheckingProfile(false);
             return;
           }
         } catch (error) {
@@ -350,6 +361,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.log('🔄 Setting user data:', userData);
             setUser(userData);
             setIsLoading(false);
+            setIsCheckingProfile(false);
             return;
           }
         } catch (error) {
@@ -386,6 +398,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               assigned_doctor_id: patientByEmail.assigned_doctor_id,
             });
             setIsLoading(false);
+            setIsCheckingProfile(false);
             return;
           }
         } catch (error) {
@@ -417,6 +430,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               registration_no: doctorByUserId.registration_no,
             });
             setIsLoading(false);
+            setIsCheckingProfile(false);
             return;
           }
 
@@ -437,6 +451,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 registration_no: doctorByName.registration_no,
               });
               setIsLoading(false);
+              setIsCheckingProfile(false);
               return;
             }
           }
@@ -450,11 +465,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log('🔄 Setting user to null and isLoading to false');
       setUser(null);
       setIsLoading(false);
+      setIsCheckingProfile(false);
 
     } catch (error) {
       console.error('❌ Error fetching user profile by Clerk ID:', error);
       setUser(null);
       setIsLoading(false);
+      setIsCheckingProfile(false);
     }
   };
 
@@ -470,6 +487,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else {
           setUser(null);
           setIsLoading(false);
+          setIsCheckingProfile(false);
         }
       }
     );
@@ -505,7 +523,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, login, signUp, logout, isLoading, setUser }}>
+    <AuthContext.Provider value={{ user, session, login, signUp, logout, isLoading, isCheckingProfile, setUser }}>
       {children}
     </AuthContext.Provider>
   );

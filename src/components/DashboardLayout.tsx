@@ -37,12 +37,6 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
             </div>
           </header>
           <div className="flex-1 p-6 overflow-auto">
-            <div className="border-2 border-red-500 p-4 mb-4">
-              <h2 className="text-lg font-bold text-red-600">DEBUG: Dashboard Content</h2>
-              <p>User: {user?.name}</p>
-              <p>Role: {user?.role}</p>
-              <p>Registration No: {user?.registration_no || 'None'}</p>
-            </div>
             {children}
           </div>
         </main>

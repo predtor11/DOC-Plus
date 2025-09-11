@@ -24,20 +24,24 @@ import { SignedIn, SignedOut, SignIn, SignUp, useClerk } from '@clerk/clerk-reac
 const queryClient = new QueryClient();
 
 const AppRoutes = () => {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, isCheckingProfile } = useAuth();
   const location = useLocation();
 
   console.log('🔄 AppRoutes - Current location:', location.pathname);
-  console.log('🔄 AppRoutes - user:', user, 'isLoading:', isLoading);
+  console.log('🔄 AppRoutes - user:', user, 'isLoading:', isLoading, 'isCheckingProfile:', isCheckingProfile);
 
   // Show loading spinner while determining user state
-  if (isLoading) {
+  if (isLoading || isCheckingProfile) {
     console.log('⏳ AppRoutes - Still loading...');
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading...</p>
+          {isCheckingProfile ? (
+            <p className="text-muted-foreground">Checking if you are a doctor...</p>
+          ) : (
+            <p className="text-muted-foreground">Loading...</p>
+          )}
         </div>
       </div>
     );
@@ -145,17 +149,21 @@ const AppRoutes = () => {
 
 const AppContent = () => {
   const { loaded } = useClerk();
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, isCheckingProfile } = useAuth();
 
-  console.log('🔄 AppContent - Clerk loaded:', loaded, 'Auth loading:', isLoading, 'User:', user);
+  console.log('🔄 AppContent - Clerk loaded:', loaded, 'Auth loading:', isLoading, 'Checking profile:', isCheckingProfile, 'User:', user);
 
-  if (!loaded || isLoading) {
+  if (!loaded || isLoading || isCheckingProfile) {
     console.log('⏳ AppContent - Still loading...');
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading...</p>
+          {isCheckingProfile ? (
+            <p className="text-muted-foreground">Checking if you are a doctor...</p>
+          ) : (
+            <p className="text-muted-foreground">Loading...</p>
+          )}
         </div>
       </div>
     );
