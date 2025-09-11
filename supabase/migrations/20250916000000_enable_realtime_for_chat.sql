@@ -28,6 +28,43 @@ BEGIN
     RAISE NOTICE 'Messages table exists and is ready for realtime configuration';
 END $$;
 
+-- Enable Row Level Security on messages table if not already enabled
+ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
+
+-- Create policy to allow users to read messages from their sessions
+DROP POLICY IF EXISTS "Users can read messages from their sessions" ON public.messages;
+CREATE POLICY "Users can read messages from their sessions"
+ON public.messages
+FOR SELECT
+USING (
+  session_id IN (
+    SELECT id FROM public.chat_sessions
+    WHERE participant_1_id = auth.jwt() ->> 'sub'
+    OR participant_2_id = auth.jwt() ->> 'sub'
+  )
+);
+
+-- Create policy to allow users to insert messages into their sessions
+DROP POLICY IF EXISTS "Users can insert messages into their sessions" ON public.messages;
+CREATE POLICY "Users can insert messages into their sessions"
+ON public.messages
+FOR INSERT
+WITH CHECK (
+  session_id IN (
+    SELECT id FROM public.chat_sessions
+    WHERE participant_1_id = auth.jwt() ->> 'sub'
+    OR participant_2_id = auth.jwt() ->> 'sub'
+  )
+  AND sender_id = auth.jwt() ->> 'sub'
+);
+
+-- Note: Realtime configuration is typically managed through the Supabase dashboard
+-- or through the Supabase CLI. This migration serves as documentation.
+
+-- If you need to enable realtime programmatically, you can use:
+-- ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
+-- But this is usually handled automatically by Supabase
+
 -- Note: Realtime configuration is typically managed through the Supabase dashboard
 -- or through the Supabase CLI. This migration serves as documentation.
 
