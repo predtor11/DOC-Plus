@@ -110,7 +110,6 @@ const PatientRegistration = () => {
 
             if (firstDoctor && !firstDoctorError) {
               doctorRecord = firstDoctor;
-              console.log('Using first available doctor as fallback:', firstDoctor.name);
             } else {
               doctorLookupError = firstDoctorError || new Error('No doctors found in system');
             }
@@ -127,7 +126,6 @@ const PatientRegistration = () => {
 
         if (fallbackDoctor && !fallbackError) {
           doctorRecord = fallbackDoctor;
-          console.log('Using fallback doctor:', fallbackDoctor.name);
         } else {
           doctorLookupError = fallbackError || error;
         }
@@ -224,7 +222,6 @@ const PatientRegistration = () => {
 
       // Send temporary password via email
       try {
-        console.log('Attempting to send temporary password email...');
         const { error: emailError } = await supabase.functions.invoke('send-temp-password', {
           body: {
             patientName: `${patientData.firstName} ${patientData.lastName}`.trim(),
@@ -238,8 +235,6 @@ const PatientRegistration = () => {
           console.error('Email sending failed:', emailError);
           throw new Error(`Email service error: ${emailError.message}`);
         }
-
-        console.log('Temporary password email sent successfully');
       } catch (emailError: any) {
         console.error('Failed to send email:', emailError);
 
@@ -275,8 +270,6 @@ const PatientRegistration = () => {
         if (chatError) {
           console.warn('Patient registered successfully but chat session creation failed:', chatError);
           // Don't fail the registration, just log the warning
-        } else {
-          console.log('Chat session created successfully for new patient:', chatSession);
         }
       } catch (chatSessionError) {
         console.warn('Error creating chat session for new patient:', chatSessionError);

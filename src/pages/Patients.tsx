@@ -110,7 +110,7 @@ const Patients = () => {
           // Find the doctor that matches our user ID
           doctorRecord = doctors.find(d => d.user_id === doctorUserId) || doctors[0];
           if (doctorRecord.user_id !== doctorUserId) {
-            console.log('Using fallback doctor for patient fetching - user ID mismatch');
+            // Using fallback doctor for patient fetching - user ID mismatch
           }
         }
       } catch (error) {
@@ -119,12 +119,6 @@ const Patients = () => {
 
       if (!doctorRecord) {
         console.error('No doctor record found for user:', user.id);
-        console.log('Available doctors in system:');
-        // Try to list all doctors for debugging
-        const { data: allDoctors } = await supabase
-          .from('doctors')
-          .select('user_id, name');
-        console.log('All doctors:', allDoctors);
         setPatients([]);
         return;
       }
@@ -136,8 +130,6 @@ const Patients = () => {
       }
 
       const actualDoctorUserId = doctorRecord.user_id;
-      console.log('Using doctor user_id for fetching:', actualDoctorUserId);
-      console.log('Fetching patients for doctor:', actualDoctorUserId);
 
       // Now fetch patients using the doctor's actual user_id from database
       const { data, error } = await supabase
@@ -152,7 +144,6 @@ const Patients = () => {
         return;
       }
 
-      console.log('Fetched patients for doctor', actualDoctorUserId, ':', data);
       setPatients(data || []);
     } catch (error) {
       console.error('Error fetching patients:', error);
@@ -183,7 +174,7 @@ const Patients = () => {
         // Find the doctor that matches our user ID
         doctorRecord = doctors.find(d => d.user_id === user.id) || doctors[0];
         if (doctorRecord.user_id !== user.id) {
-          console.log('Using fallback doctor for unread counts - user ID mismatch');
+          // Using fallback doctor for unread counts - user ID mismatch
         }
       }
     } catch (error) {
@@ -203,7 +194,6 @@ const Patients = () => {
       for (const patient of patients) {
         // Skip patients without user_id (they can't have chat sessions)
         if (!patient.user_id) {
-          console.warn(`Patient ${patient.name} has no user_id, skipping chat session check`);
           counts[patient.id] = 0;
           continue;
         }
@@ -253,14 +243,6 @@ const Patients = () => {
   };
 
   const handlePatientSelect = async (patient: Patient) => {
-    console.log('=== PATIENT SELECT START ===');
-    console.log('Selected patient:', patient);
-    console.log('Current user:', user);
-    console.log('User authenticated?', !!user);
-    console.log('Doctor auth ID:', user?.id);
-    console.log('Patient auth ID (user_id):', patient.user_id); // This is the auth user ID, NOT the patients table primary key
-    console.log('Patient record ID (id):', patient.id); // This is just for display/UI purposes
-
     setSelectedPatient(patient);
 
     // Check if user is authenticated
@@ -300,7 +282,7 @@ const Patients = () => {
           // Find the doctor that matches our user ID
           doctorRecord = doctors.find(d => d.user_id === user.id) || doctors[0];
           if (doctorRecord.user_id !== user.id) {
-            console.log('Using fallback doctor - user ID mismatch detected');
+            // Using fallback doctor - user ID mismatch detected
           }
         } else {
           doctorLookupError = doctorsError || new Error('No doctors found');
@@ -321,7 +303,6 @@ const Patients = () => {
       }
 
       const actualDoctorUserId = doctorRecord.user_id;
-      console.log('Using doctor ID for chat:', actualDoctorUserId, 'for user:', user.id);
 
       // IMPORTANT: We use patient.user_id (auth user ID) for chat, NOT patient.id (patients table PK)
       const { data: existingSession, error: fetchError } = await ChatAPI.fetchDoctorPatientSession(
@@ -361,17 +342,12 @@ const Patients = () => {
         // Refresh unread counts
         fetchUnreadCounts();
       } else {
-        console.log('No existing session found, attempting to create new one...');
-        console.log('Doctor ID:', actualDoctorUserId);
-        console.log('Patient ID:', patient.user_id);
         // Create new session
         const { data: newSession, error: createError } = await ChatAPI.createDoctorPatientSession(
           actualDoctorUserId, // Doctor's actual user ID from database
           patient.user_id, // Patient's auth user ID
           `Chat with ${patient.name}`
         );
-
-        console.log('Session creation result:', { newSession, createError });
 
         if (createError) {
           console.error('Session creation failed:', createError);
@@ -384,7 +360,6 @@ const Patients = () => {
         }
 
         if (newSession) {
-          console.log('Session created successfully:', newSession);
           // Transform the session data to match our DoctorPatientChatSession interface
           const transformedSession: DoctorPatientChatSession = {
             id: newSession.id,
@@ -415,10 +390,6 @@ const Patients = () => {
   };
 
   const handleNewSession = async () => {
-    console.log('handleNewSession called');
-    console.log('Selected patient:', selectedPatient);
-    console.log('Current user:', user);
-
     if (!selectedPatient) {
       toast({
         title: "No patient selected",
@@ -456,15 +427,12 @@ const Patients = () => {
 
       const actualDoctorUserId = doctorRecord.user_id;
 
-      console.log('Creating new session for patient:', selectedPatient.name);
       // Create new session for the selected patient
       const { data: newSession, error: createError } = await ChatAPI.createDoctorPatientSession(
         actualDoctorUserId, // Doctor's actual user ID from database
         selectedPatient.user_id, // Patient's auth user ID
         `Chat with ${selectedPatient.name}`
       );
-
-      console.log('New session creation result:', { newSession, createError });
 
       if (createError) {
         console.error('New session creation failed:', createError);
@@ -477,7 +445,6 @@ const Patients = () => {
       }
 
       if (newSession) {
-        console.log('New session created successfully:', newSession);
         // Transform the session data to match our DoctorPatientChatSession interface
         const transformedSession: DoctorPatientChatSession = {
           id: newSession.id,

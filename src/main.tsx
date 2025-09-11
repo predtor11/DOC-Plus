@@ -7,12 +7,6 @@ import { ClerkProvider } from '@clerk/clerk-react'
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 
-console.log('🔧 Clerk Configuration:', {
-  hasKey: !!PUBLISHABLE_KEY,
-  keyLength: PUBLISHABLE_KEY?.length,
-  keyPreview: PUBLISHABLE_KEY ? PUBLISHABLE_KEY.substring(0, 20) + '...' : 'undefined'
-});
-
 if (!PUBLISHABLE_KEY) {
   throw new Error("Missing Publishable Key")
 }
