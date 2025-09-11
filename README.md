@@ -95,17 +95,41 @@ npm run dev
 
 App runs at: http://localhost:5173 (default Vite port)
 
-## 🧪 Testing
+## 🧪 Testing the AI Medical Assistant
 
-Test scaffolding was cleaned up (previous empty placeholder files removed). No active automated tests are currently included.
+### For Doctors: 5 Questions to Test the Medical AI Assistant
 
-To reintroduce tests later:
+**Patient Diagnosis Query:**
+> "A 45-year-old male patient presents with chest pain, shortness of breath, and fatigue. What differential diagnoses should I consider, and what immediate tests would you recommend?"
 
-```pwsh
-npm install -D vitest @testing-library/react @testing-library/jest-dom
-```
+**Treatment Plan Request:**
+> "For a patient with Type 2 diabetes and hypertension, what would be an appropriate medication regimen, including dosages and potential side effects?"
 
-Create files like `src/__tests__/ComponentName.test.tsx` and a `vitest.config.ts` if you need custom config.
+**Medical Image Analysis:**
+> "I've uploaded an X-ray of a patient's chest. Can you analyze it for signs of pneumonia or other abnormalities and suggest next steps?"
+
+**Medication Interaction Check:**
+> "A patient is taking metformin, lisinopril, and atorvastatin. Are there any known interactions, and should I adjust the dosages?"
+
+**Clinical Guidelines Inquiry:**
+> "What are the current guidelines for managing acute coronary syndrome in an emergency setting, including thrombolytic therapy options?"
+
+### For Patients: 5 Things to Discuss to Test Both AI Agents
+
+**Stress Management Scenario:**
+> "I've been feeling overwhelmed with work lately and having trouble sleeping. Can you help me with some relaxation techniques and stress relief strategies?"
+
+**Emotional Support Request:**
+> "I'm going through a difficult breakup and feeling very anxious. I'd like to talk about coping with emotional pain and building resilience."
+
+**Health Anxiety Discussion:**
+> "I've been worried about my health after reading about various diseases online. How can I manage health anxiety without constant worry?"
+
+**Lifestyle Changes Query:**
+> "I'm trying to improve my mental health through better habits. What are some practical ways to incorporate mindfulness and self-care into my daily routine?"
+
+**Crisis Intervention Test:**
+> "I'm feeling really down and having thoughts of not wanting to continue. What should I do, and can you guide me toward professional help?"
 
 ## 🚀 Deployment (Vercel)
 
