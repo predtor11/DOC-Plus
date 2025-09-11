@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { User, Session } from '@supabase/supabase-js';
 
 // Import Clerk components for OAuth
-import { SignedIn, SignedOut, SignIn, SignUp, useUser, useClerk, useAuth as useClerkAuth } from '@clerk/clerk-react';
+import { SignedIn, SignedOut, SignIn, SignUp, useUser, useClerk } from '@clerk/clerk-react';
 
 interface DoctorProfile {
   id: string;
@@ -61,7 +61,6 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user: clerkUser, isLoaded: isClerkLoaded } = useUser();
   const { signOut: clerkSignOut } = useClerk();
-  const { getToken } = useClerkAuth();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -95,33 +94,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log('🚀 Setting up Supabase OAuth for Clerk user:', clerkUser.id);
 
-      // Try to get the JWT token from Clerk (optional - fallback to profile lookup if it fails)
-      let token = null;
-      try {
-        token = await getToken({ template: 'supabase' }) || await getToken();
-        console.log('🔑 Got Clerk JWT token:', token ? '***' + token.slice(-10) : 'null');
-      } catch (tokenError) {
-        console.log('⚠️ JWT token retrieval failed (this is expected if no supabase template exists):', tokenError.message);
-        console.log('🔄 Continuing with profile lookup instead...');
-      }
-
-      if (token) {
-        // Set the JWT token in Supabase auth
-        // We'll use the token directly for authenticated requests
-        console.log('✅ Clerk JWT token available for Supabase auth');
-
-        // For now, let's create a minimal session object to satisfy the auth state
-        // The actual authentication will happen via the JWT token in requests
-        const mockSession = {
-          access_token: token,
-          refresh_token: '',
-          user: {
-            id: clerkUser.id,
-            email: clerkUser.primaryEmailAddress?.emailAddress,
-          },
-        };
-        setSession(mockSession as any);
-      }
+      // Skip JWT token retrieval for now - not needed for current auth flow
+      // The authentication works through profile lookup instead
+      console.log('🔄 Skipping JWT token setup - using profile lookup authentication');
 
       // Start checking for user profile (this will work even without JWT token)
       setIsCheckingProfile(true);
