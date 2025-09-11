@@ -223,8 +223,8 @@ From `package.json`:
 3. Commit changes: `git commit -m "feat: add xyz"`
 4. Open PR with context & screenshots
 
-<<<<<<< HEAD
-## 👥 Contact our Team
+
+## 👥 Connect with our team
 
 | Name                            | LinkedIn                                                 |
 | ------------------------------- | -------------------------------------------------------- |
@@ -234,8 +234,6 @@ From `package.json`:
 | Vijay Vinod Mane                | https://www.linkedin.com/in/vijay-vinod-mane/            |
 | Kshatriya Nandini Kuldeep Singh | https://www.linkedin.com/in/kshatriya-nandini-331a16244/ |
 =======
-## 👥 Connet with our team
->>>>>>> 46d832e (feat: add Doc+ logo to README header)
 
 
 
