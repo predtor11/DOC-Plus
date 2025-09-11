@@ -61,9 +61,6 @@ const PatientRegistration = () => {
     e.preventDefault();
     setIsLoading(true);
 
-    // Generate temporary password early
-    const tempPassword = Math.random().toString(36).slice(-12) + 'Temp123!';
-
     try {
       // Check if user exists in doctors table using a simpler approach
       // Instead of querying doctors table directly, use the user data from AuthContext
@@ -171,110 +168,44 @@ const PatientRegistration = () => {
         throw patientError;
       }
 
-      // Create a Supabase auth user for the patient
-      // const tempPassword = Math.random().toString(36).slice(-12) + 'Temp123!'; // Moved to top of function
-
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: patientData.email,
-        password: tempPassword,
-        options: {
-          emailRedirectTo: `${window.location.origin}/signin`,
-          data: {
-            name: `${patientData.firstName} ${patientData.lastName}`.trim(),
-            isPatient: true,
-            doctorId: doctorUserId // Use the doctor's Clerk user ID
-          }
+      // Create a Clerk invitation for the patient
+      const { data: inviteData, error: inviteError } = await supabase.functions.invoke('invite-patient', {
+        body: {
+          patientEmail: patientData.email,
+          patientName: `${patientData.firstName} ${patientData.lastName}`.trim(),
+          doctorName: user.name,
+          doctorId: user.id
         }
       });
 
-      if (authError) {
-        // If auth creation fails, delete the patient record
+      if (inviteError) {
+        // If invitation fails, delete the patient record
         await supabase.from('patients').delete().eq('id', patientRecord.id);
-        throw authError;
+        throw inviteError;
       }
 
-      // Update patient record with user_id
-      if (authData.user) {
-        const updateData: any = { user_id: authData.user.id };
+      // Update patient record with invitation data
+      const updateData: any = { invitation_id: inviteData.invitation_id };
 
-        // Try to set clerk_user_id if the column exists
-        try {
-          const { error: updateError } = await supabase
-            .from('patients')
-            .update({ user_id: authData.user.id, clerk_user_id: authData.user.id })
-            .eq('id', patientRecord.id);
-
-          if (updateError) {
-            console.warn('Patient created successfully but user_id/clerk_user_id update failed - patient can still log in later');
-          }
-        } catch (error) {
-          // If clerk_user_id column doesn't exist, just update user_id
-          const { error: updateError } = await supabase
-            .from('patients')
-            .update({ user_id: authData.user.id })
-            .eq('id', patientRecord.id);
-
-          if (updateError) {
-            console.warn('Patient created successfully but user_id update failed - patient can still log in later');
-          }
-        }
-      }
-
-      // Send temporary password via email
+      // Try to set invitation_id
       try {
-        const { error: emailError } = await supabase.functions.invoke('send-temp-password', {
-          body: {
-            patientName: `${patientData.firstName} ${patientData.lastName}`.trim(),
-            patientEmail: patientData.email,
-            tempPassword: tempPassword,
-            doctorName: user.name
-          }
-        });
+        const { error: updateError } = await supabase
+          .from('patients')
+          .update({ invitation_id: inviteData.invitation_id })
+          .eq('id', patientRecord.id);
 
-        if (emailError) {
-          console.error('Email sending failed:', emailError);
-          throw new Error(`Email service error: ${emailError.message}`);
+        if (updateError) {
+          console.warn('Patient created successfully but invitation_id update failed');
         }
-      } catch (emailError: any) {
-        console.error('Failed to send email:', emailError);
-
-        // Show credentials modal as fallback
-        setPatientCredentials({
-          name: `${patientData.firstName} ${patientData.lastName}`.trim(),
-          email: patientData.email,
-          password: tempPassword
-        });
-        setShowCredentialsModal(true);
-
-        // Also show toast with warning
-        toast({
-          title: "Email delivery failed",
-          description: "Patient registered successfully, but email could not be sent. Please provide credentials manually.",
-          variant: "destructive",
-        });
+      } catch (error) {
+        console.warn('Patient created successfully but invitation_id update failed');
       }
 
-      // Create a chat session for the doctor-patient communication
-      try {
-        const { data: chatSession, error: chatError } = await supabase
-          .from('chat_sessions')
-          .insert({
-            session_type: 'doctor-patient',
-            participant_1_id: actualDoctorUserId, // Doctor's user_id
-            participant_2_id: authData.user.id,   // Patient's user_id
-            title: `Chat with ${patientData.firstName} ${patientData.lastName}`.trim(),
-          })
-          .select()
-          .single();
+      // Clerk invitation email is sent automatically by Clerk's system
+      // No need for separate email since Clerk handles the invitation process
 
-        if (chatError) {
-          console.warn('Patient registered successfully but chat session creation failed:', chatError);
-          // Don't fail the registration, just log the warning
-        }
-      } catch (chatSessionError) {
-        console.warn('Error creating chat session for new patient:', chatSessionError);
-        // Don't fail the registration if chat session creation fails
-      }
+      // Chat session will be created when patient accepts invitation and signs in
+      // For now, just mark the patient as registered with invitation pending
 
       toast({
         title: "Patient registered successfully",
