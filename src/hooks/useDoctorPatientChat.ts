@@ -255,7 +255,10 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
             filter: `session_id=eq.${sessionId}`,
           },
           (payload) => {
-            console.log('New message received via real-time:', payload);
+            console.log('🎉 New message received via real-time for session', sessionId, ':', payload);
+            console.log('Message sender_id:', payload.new.sender_id);
+            console.log('Current user id:', user?.auth_user_id || user?.id);
+
             const newMessage = {
               id: payload.new.id,
               session_id: payload.new.session_id,
@@ -270,13 +273,17 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
               // Check if message already exists to avoid duplicates
               const messageExists = prev.some(msg => msg.id === newMessage.id);
               if (messageExists) {
+                console.log('Message already exists, skipping duplicate');
                 return prev;
               }
+              console.log('Adding new message to state:', newMessage);
               return [...prev, newMessage];
             });
           }
         )
-        .subscribe();
+        .subscribe((status) => {
+          console.log('Real-time subscription status for session', sessionId, ':', status);
+        });
 
       // Cleanup subscription on unmount or session change
       return () => {
