@@ -277,6 +277,7 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
               is_read: payload.new.is_read,
               created_at: payload.new.created_at
             });
+            console.log('Current user ID:', user?.id);
 
             const newMessage = {
               id: payload.new.id,

@@ -93,7 +93,16 @@ const DoctorPatientChatWindow: React.FC<DoctorPatientChatWindowProps> = ({
   };
 
   const getMessageIcon = (message: DoctorPatientMessage) => {
-    if (message.sender_id === (user?.auth_user_id || user?.id)) {
+    const isCurrentUser = message.sender_id === user?.id;
+    console.log('Message sender check:', {
+      messageSenderId: message.sender_id,
+      currentUserId: user?.id,
+      authUserId: user?.auth_user_id,
+      userId: user?.user_id,
+      isCurrentUser
+    });
+
+    if (isCurrentUser) {
       return <User className="h-4 w-4" />;
     } else {
       return <Stethoscope className="h-4 w-4" />;
@@ -101,7 +110,8 @@ const DoctorPatientChatWindow: React.FC<DoctorPatientChatWindowProps> = ({
   };
 
   const getMessageStyle = (message: DoctorPatientMessage) => {
-    if (message.sender_id === (user?.auth_user_id || user?.id)) {
+    const isCurrentUser = message.sender_id === user?.id;
+    if (isCurrentUser) {
       return 'bg-primary text-primary-foreground ml-16';
     } else {
       return 'bg-muted text-muted-foreground mr-16';
@@ -109,9 +119,12 @@ const DoctorPatientChatWindow: React.FC<DoctorPatientChatWindowProps> = ({
   };
 
   const getSenderName = (message: DoctorPatientMessage) => {
-    if (message.sender_id === (user?.auth_user_id || user?.id)) {
+    const isCurrentUser = message.sender_id === user?.id;
+    if (isCurrentUser) {
       return 'You';
     } else {
+      // For doctor-patient chat, if it's not the current user,
+      // it must be the other participant
       return user?.role === 'doctor' ? 'Patient' : 'Doctor';
     }
   };
@@ -172,7 +185,7 @@ const DoctorPatientChatWindow: React.FC<DoctorPatientChatWindowProps> = ({
                 <div
                   key={message.id}
                   className={`flex ${
-                    message.sender_id === (user?.auth_user_id || user?.id) ? 'justify-end' : 'justify-start'
+                    message.sender_id === user?.id ? 'justify-end' : 'justify-start'
                   }`}
                 >
                   <div className={`max-w-[80%] p-3 rounded-lg ${getMessageStyle(message)}`}>
