@@ -239,6 +239,42 @@ export class ChatAPI {
           error: { message: 'Failed to fetch session information - session not found', code: 'SESSION_NOT_FOUND' }
         };
       }
+
+      // Additional validation: Check if the session actually exists in the database
+      let sessionExists = false;
+      if (isAiSession) {
+        const { data: aiSessionCheck, error: aiCheckError } = await supabase
+          .from('chat_sessions')
+          .select('id')
+          .eq('id', sessionId)
+          .single();
+        sessionExists = !!aiSessionCheck && !aiCheckError;
+      } else {
+        const { data: dpSessionCheck, error: dpCheckError } = await supabase
+          .from('doctor_patient_chat_sessions')
+          .select('id')
+          .eq('id', sessionId)
+          .single();
+        sessionExists = !!dpSessionCheck && !dpCheckError;
+      }
+
+      if (!sessionExists) {
+        console.error('Session validation failed - session does not exist in database');
+        return {
+          data: null,
+          error: { message: 'Session does not exist or is invalid', code: 'INVALID_SESSION' }
+        };
+      }
+
+      // Validate sender_id
+      if (!senderId || senderId.trim() === '') {
+        console.error('Invalid sender_id:', senderId);
+        return {
+          data: null,
+          error: { message: 'Sender ID is required and cannot be empty', code: 'INVALID_SENDER_ID' }
+        };
+      }
+
       console.log('ChatAPI.sendMessage - Session type:', session?.session_type, 'Is AI session:', isAiSession, 'Session ID:', sessionId);
 
       const messageData = {
@@ -262,6 +298,7 @@ export class ChatAPI {
       if (isAiSession) {
         // For AI sessions, use the regular messages table
         console.log('Using messages table for AI session, sessionId:', sessionId);
+        console.log('Message data for AI session:', messageData);
         const result = await supabase
           .from('messages')
           .insert(messageData)
@@ -270,10 +307,11 @@ export class ChatAPI {
 
         data = result.data;
         error = result.error;
-        console.log('Messages table insert result:', { data: !!data, error: error?.message });
+        console.log('Messages table insert result:', { data: !!data, error: error?.message, errorCode: error?.code });
       } else {
         // For doctor-patient sessions, use the dedicated doctor_patient_messages table
         console.log('Using doctor_patient_messages table for doctor-patient session, sessionId:', sessionId);
+        console.log('Message data for doctor-patient session:', doctorPatientMessageData);
         const result = await supabase
           .from('doctor_patient_messages')
           .insert(doctorPatientMessageData)
@@ -282,11 +320,17 @@ export class ChatAPI {
 
         data = result.data;
         error = result.error;
-        console.log('Doctor-patient messages table insert result:', { data: !!data, error: error?.message });
+        console.log('Doctor-patient messages table insert result:', { data: !!data, error: error?.message, errorCode: error?.code });
       }
 
       if (error) {
         console.error('Message send error:', error);
+        console.error('Error details:', {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint
+        });
         return {
           data: null,
           error: { message: `Failed to send message: ${error.message}`, code: error.code }
@@ -294,7 +338,13 @@ export class ChatAPI {
       }
 
       console.log('Message sent successfully:', data);
-      return { data: data as Message, error: null };
+
+      // Return the correct type based on session type
+      if (isAiSession) {
+        return { data: data as Message, error: null };
+      } else {
+        return { data: data as DoctorPatientMessage, error: null };
+      }
     } catch (err) {
       return {
         data: null,

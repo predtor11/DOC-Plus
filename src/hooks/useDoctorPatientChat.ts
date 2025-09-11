@@ -35,14 +35,14 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
     try {
       setLoading(true);
       console.log('Fetching doctor-patient sessions for user:', user.id);
-      console.log('Using database user_id for session lookup:', user.user_id || user.id);
+      console.log('Using Clerk user ID for session lookup:', user.id);
 
       // For now, just use the regular chat_sessions table (skip doctor_patient_chat_sessions)
       console.log('Using doctor_patient_chat_sessions table for doctor-patient sessions');
       const { data, error } = await supabase
         .from('doctor_patient_chat_sessions')
         .select('*')
-        .or(`doctor_id.eq.${user.user_id || user.id},patient_id.eq.${user.user_id || user.id}`)
+        .or(`doctor_id.eq.${user.id},patient_id.eq.${user.id}`)
         .order('last_message_at', { ascending: false, nullsFirst: false });
 
       if (error) {
@@ -165,14 +165,14 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
 
     try {
       setLoading(true);
-      const senderId = user.auth_user_id || user.id;
+      const senderId = user.id; // Use Clerk user ID for sender_id
       console.log('Sending doctor-patient message via ChatAPI:', {
         sessionId,
         content,
         senderId,
         userAuthState: {
           id: user.id,
-          auth_user_id: user.auth_user_id
+          user_id: user.user_id
         }
       });
 
@@ -254,7 +254,7 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
       console.log('Setting up real-time subscription for session:', sessionId);
       console.log('Current user auth state:', {
         userId: user?.id,
-        authUserId: user?.auth_user_id
+        user_id: user?.user_id
       });
 
       const channel = supabase
@@ -270,8 +270,8 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
           (payload) => {
             console.log('🎉 New message received via real-time for session', sessionId, ':', payload);
             console.log('Message sender_id:', payload.new.sender_id);
-            console.log('Current user id:', user?.auth_user_id || user?.id);
-            console.log('Is message from current user?', (payload.new.sender_id === (user?.auth_user_id || user?.id)));
+            console.log('Current user id:', user?.id);
+            console.log('Is message from current user?', (payload.new.sender_id === user?.id));
 
             const newMessage = {
               id: payload.new.id,
