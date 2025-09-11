@@ -51,31 +51,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, onSessionUpdate, onNew
     }
   }, [session?.id, user?.id, messages.length]);
 
-  // Real-time subscription for messages
-  useEffect(() => {
-    if (!session?.id) return;
-
-    const channel = supabase
-      .channel(`messages:${session.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `session_id=eq.${session.id}`,
-        },
-        (payload) => {
-          // Refetch messages to ensure consistency
-          fetchMessages();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [session?.id, fetchMessages]);
+  // Real-time subscription is now handled by the useMessages hook
+  // No need for additional subscription here as it's already implemented in the hook
 
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !session) return;

@@ -183,6 +183,59 @@ export const useMessages = (sessionId: string | null) => {
     }
   }, [sessionId]);
 
+  // Realtime subscription for new messages
+  useEffect(() => {
+    if (!sessionId) return;
+
+    console.log('Setting up realtime subscription for messages in session:', sessionId);
+
+    // Create a unique channel for this chat session
+    const channel = supabase
+      .channel(`chat-messages-${sessionId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `session_id=eq.${sessionId}`,
+        },
+        (payload) => {
+          console.log('Realtime message received in useMessages:', payload);
+
+          // Only add the message if it's not already in our state (to avoid duplicates)
+          setMessages(prev => {
+            const messageExists = prev.some(msg => msg.id === payload.new.id);
+            if (messageExists) {
+              console.log('Message already exists in useMessages, skipping:', payload.new.id);
+              return prev;
+            }
+
+            console.log('Adding new message to useMessages state:', payload.new);
+            return [...prev, payload.new as Message];
+          });
+        }
+      )
+      .subscribe((status) => {
+        console.log('useMessages realtime subscription status:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('Successfully subscribed to realtime updates for messages in session:', sessionId);
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('Realtime subscription error for messages in session:', sessionId);
+        } else if (status === 'TIMED_OUT') {
+          console.warn('Realtime subscription timed out for messages in session:', sessionId);
+        } else if (status === 'CLOSED') {
+          console.log('Realtime subscription closed for messages in session:', sessionId);
+        }
+      });
+
+    // Cleanup function to unsubscribe when component unmounts or sessionId changes
+    return () => {
+      console.log('Cleaning up realtime subscription for messages in session:', sessionId);
+      supabase.removeChannel(channel);
+    };
+  }, [sessionId]);
+
   return {
     messages,
     loading,

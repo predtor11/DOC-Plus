@@ -246,14 +246,66 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
     }
   }, [sessionId]);
 
-  return {
-    sessions,
-    messages,
-    loading,
-    fetchSessions,
-    fetchMessages,
-    createSession,
-    sendMessage,
-    markMessagesAsRead,
-  };
+  // Realtime subscription for new messages
+  useEffect(() => {
+    if (!sessionId) return;
+
+    console.log('Setting up realtime subscription for session:', sessionId);
+
+    // Create a unique channel for this chat session
+    const channel = supabase
+      .channel(`doctor-patient-chat-${sessionId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `session_id=eq.${sessionId}`,
+        },
+        (payload) => {
+          console.log('Realtime message received:', payload);
+
+          // Transform the payload to match our interface
+          const newMessage: DoctorPatientMessage = {
+            id: payload.new.id,
+            session_id: payload.new.session_id,
+            sender_id: payload.new.sender_id,
+            content: payload.new.content,
+            is_read: payload.new.is_read || false,
+            created_at: payload.new.created_at,
+          };
+
+          // Only add the message if it's not already in our state (to avoid duplicates)
+          setMessages(prev => {
+            const messageExists = prev.some(msg => msg.id === newMessage.id);
+            if (messageExists) {
+              console.log('Message already exists, skipping:', newMessage.id);
+              return prev;
+            }
+
+            console.log('Adding new message to state:', newMessage);
+            return [...prev, newMessage];
+          });
+        }
+      )
+      .subscribe((status) => {
+        console.log('Realtime subscription status:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('Successfully subscribed to realtime updates for session:', sessionId);
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('Realtime subscription error for session:', sessionId);
+        } else if (status === 'TIMED_OUT') {
+          console.warn('Realtime subscription timed out for session:', sessionId);
+        } else if (status === 'CLOSED') {
+          console.log('Realtime subscription closed for session:', sessionId);
+        }
+      });
+
+    // Cleanup function to unsubscribe when component unmounts or sessionId changes
+    return () => {
+      console.log('Cleaning up realtime subscription for session:', sessionId);
+      supabase.removeChannel(channel);
+    };
+  }, [sessionId]);
 };
