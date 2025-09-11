@@ -273,7 +273,12 @@ export const useDoctorPatientChat = (sessionId: string | null): HookReturn => {
     console.log('Setting up realtime subscription:', channelName);
 
     const channel = supabase
-      .channel(channelName)
+      .channel(channelName, {
+        config: {
+          broadcast: { self: true },
+          presence: { key: user.id }
+        }
+      })
       .on(
         'postgres_changes',
         {
@@ -283,8 +288,10 @@ export const useDoctorPatientChat = (sessionId: string | null): HookReturn => {
           filter: `session_id=eq.${sessionId}`
         },
         (payload) => {
+          console.log('🎉 Realtime message received:', payload);
+
           if (!payload.new || !payload.new.id) {
-            console.warn('Invalid payload received');
+            console.warn('Invalid payload received:', payload);
             return;
           }
 
@@ -298,42 +305,60 @@ export const useDoctorPatientChat = (sessionId: string | null): HookReturn => {
           };
 
           setMessages(prev => {
+            // Check for duplicates
             if (prev.some(msg => msg.id === newMessage.id)) {
-              return prev;
-            }
-            
-            if (newMessage.sender_id === user.id) {
+              console.log('Message already exists, skipping:', newMessage.id);
               return prev;
             }
 
+            // Don't add messages from current user (they're already in state)
+            if (newMessage.sender_id === user.id) {
+              console.log('Message is from current user, skipping:', newMessage.id);
+              return prev;
+            }
+
+            console.log('✅ Adding new message to state:', newMessage.id);
             return [...prev, newMessage];
           });
         }
       )
       .subscribe((status, err) => {
+        console.log(`Realtime subscription status for ${channelName}:`, status);
+
         if (err) {
-          console.error('Subscription error:', err);
+          console.error('Realtime subscription error details:', err);
+          console.error('Error message:', err.message);
+          console.error('Error name:', err.name);
           return;
         }
 
         switch (status) {
           case 'SUBSCRIBED':
-            console.log('✅ Subscribed to realtime updates');
+            console.log('✅ Successfully subscribed to realtime updates for session:', sessionId);
             break;
           case 'CHANNEL_ERROR':
-            console.error('❌ Channel error - check Supabase realtime configuration');
+            console.error('❌ Realtime subscription failed for session:', sessionId);
+            console.error('This usually means:');
+            console.error('1. The messages table is not enabled for realtime in Supabase dashboard');
+            console.error('2. Go to Database > Replication and enable the messages table');
+            console.error('3. Make sure INSERT events are enabled');
+            console.error('4. Check that the supabase_realtime publication includes the messages table');
             break;
           case 'TIMED_OUT':
-            console.warn('⚠️ Subscription timed out');
+            console.warn('⚠️ Realtime subscription timed out for session:', sessionId);
+            console.warn('This might indicate network issues or Supabase realtime service problems');
             break;
           case 'CLOSED':
-            console.log('ℹ️ Channel closed');
+            console.log('ℹ️ Realtime subscription closed for session:', sessionId);
             break;
+          default:
+            console.log('Unknown subscription status:', status);
         }
       });
 
+    // Cleanup function to unsubscribe when component unmounts or sessionId changes
     return () => {
-      console.log('Cleaning up subscription:', channelName);
+      console.log('🧹 Cleaning up realtime subscription for session:', sessionId);
       supabase.removeChannel(channel);
     };
   }, [sessionId, user?.id]);
