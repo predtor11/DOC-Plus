@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { User, Heart, Stethoscope, AlertCircle } from 'lucide-react';
+import { User, Heart, Stethoscope, AlertCircle, Search, CheckCircle } from 'lucide-react';
 
 interface Doctor {
   id: string;
@@ -27,6 +27,9 @@ const PatientOnboardingPage: React.FC = () => {
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [invitedDoctor, setInvitedDoctor] = useState<Doctor | null>(null);
   const [invitationError, setInvitationError] = useState<string | null>(null);
+  const [searchedDoctor, setSearchedDoctor] = useState<Doctor | null>(null);
+  const [doctorSearchError, setDoctorSearchError] = useState<string | null>(null);
+  const [isSearchingDoctor, setIsSearchingDoctor] = useState(false);
 
   const [formData, setFormData] = useState({
     name: user?.fullName || '',
@@ -102,6 +105,49 @@ const PatientOnboardingPage: React.FC = () => {
     }
   };
 
+  const searchDoctorById = async (doctorId: string) => {
+    if (!doctorId.trim()) {
+      setSearchedDoctor(null);
+      setDoctorSearchError(null);
+      return;
+    }
+
+    setIsSearchingDoctor(true);
+    setDoctorSearchError(null);
+
+    try {
+      console.log('🔍 Searching for doctor with ID:', doctorId);
+
+      const { data: doctor, error } = await supabase
+        .from('doctors')
+        .select('id, user_id, name, username')
+        .eq('user_id', doctorId.trim())
+        .single();
+
+      if (error || !doctor) {
+        console.log('❌ Doctor not found:', error);
+        setSearchedDoctor(null);
+        setDoctorSearchError('Doctor not found. Please check the ID and try again.');
+        return;
+      }
+
+      console.log('✅ Doctor found:', doctor);
+      setSearchedDoctor(doctor);
+      setFormData(prev => ({ ...prev, assignedDoctorId: doctor.user_id }));
+
+      toast({
+        title: "Doctor Found",
+        description: `Dr. ${doctor.name} has been assigned to you.`,
+      });
+    } catch (error) {
+      console.error('Error searching doctor:', error);
+      setSearchedDoctor(null);
+      setDoctorSearchError('Failed to search for doctor. Please try again.');
+    } finally {
+      setIsSearchingDoctor(false);
+    }
+  };
+
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
@@ -113,6 +159,11 @@ const PatientOnboardingPage: React.FC = () => {
     try {
       if (!user?.id) {
         throw new Error('User not authenticated');
+      }
+
+      // Validate assigned doctor if not from invitation
+      if (!invitedDoctor && formData.assignedDoctorId && !searchedDoctor) {
+        throw new Error('Please search and verify your doctor before submitting');
       }
 
       const patientEmail = user.primaryEmailAddress?.emailAddress;
@@ -287,7 +338,7 @@ const PatientOnboardingPage: React.FC = () => {
 
               {/* Doctor Assignment */}
               <div className="space-y-2">
-                <Label htmlFor="assignedDoctor">Assigned Doctor *</Label>
+                <Label htmlFor="assignedDoctorId">Assigned Doctor ID *</Label>
                 {invitedDoctor ? (
                   <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
                     <div className="flex items-center gap-2 text-blue-800">
@@ -297,26 +348,56 @@ const PatientOnboardingPage: React.FC = () => {
                     </div>
                   </div>
                 ) : (
-                  <Select value={formData.assignedDoctorId} onValueChange={(value) => handleInputChange('assignedDoctorId', value)} required>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select your doctor" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {doctors.map((doctor) => (
-                        <SelectItem key={doctor.user_id} value={doctor.user_id}>
-                          <div className="flex items-center gap-2">
-                            <Stethoscope className="h-4 w-4" />
-                            {doctor.name}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <Input
+                        id="assignedDoctorId"
+                        value={formData.assignedDoctorId}
+                        onChange={(e) => {
+                          handleInputChange('assignedDoctorId', e.target.value);
+                          // Clear previous search results when user types
+                          if (searchedDoctor && e.target.value !== searchedDoctor.user_id) {
+                            setSearchedDoctor(null);
+                            setDoctorSearchError(null);
+                          }
+                        }}
+                        placeholder="Enter doctor's ID"
+                        required
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => searchDoctorById(formData.assignedDoctorId)}
+                        disabled={isSearchingDoctor || !formData.assignedDoctorId.trim()}
+                      >
+                        {isSearchingDoctor ? (
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                        ) : (
+                          <Search className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+
+                    {doctorSearchError && (
+                      <div className="flex items-center gap-2 text-red-600 text-sm">
+                        <AlertCircle className="h-4 w-4" />
+                        {doctorSearchError}
+                      </div>
+                    )}
+
+                    {searchedDoctor && (
+                      <div className="flex items-center gap-2 text-green-600 text-sm">
+                        <CheckCircle className="h-4 w-4" />
+                        <span className="font-medium">Dr. {searchedDoctor.name}</span>
+                        <span className="text-green-500">found and assigned</span>
+                      </div>
+                    )}
+                  </div>
                 )}
                 <p className="text-sm text-muted-foreground">
                   {invitedDoctor
                     ? "You've been invited by this doctor to join their practice"
-                    : "Choose the doctor who will be managing your care"
+                    : "Enter your doctor's ID and click search to verify and assign them"
                   }
                 </p>
               </div>

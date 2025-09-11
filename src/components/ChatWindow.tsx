@@ -143,7 +143,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, onSessionUpdate, onNew
   const getMessageIcon = (message: Message) => {
     if (message.is_ai_message) {
       return <Bot className="h-4 w-4" />;
-    } else if (message.sender_id === user?.id) {
+    } else if (message.sender_id === (user?.auth_user_id || user?.id)) {
       return <User className="h-4 w-4" />;
     } else {
       return <Stethoscope className="h-4 w-4" />;
@@ -158,7 +158,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, onSessionUpdate, onNew
   const getSenderName = (message: Message) => {
     if (message.is_ai_message) {
       return session?.session_type === 'ai-doctor' ? 'AI Assistant' : 'AI Support';
-    } else if (message.sender_id === user?.id) {
+    } else if (message.sender_id === (user?.auth_user_id || user?.id)) {
       return 'You';
     } else {
       return user?.role === 'doctor' ? 'Patient' : 'Doctor';
@@ -248,7 +248,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, onSessionUpdate, onNew
           )}
           
           {messages.map((message) => {
-            const isUserMessage = message.sender_id === user?.id && !message.is_ai_message;
+            const isUserMessage = message.sender_id === (user?.auth_user_id || user?.id) && !message.is_ai_message;
             const isAIMessage = message.is_ai_message;
             
             return (
