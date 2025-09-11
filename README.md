@@ -13,7 +13,7 @@ Doc+ is a full‑stack TypeScript React application that helps doctors manage pa
 
 ## 📺 Demo Video
 
-[![Watch the demo](https://img.youtube.com/vi/s5PCMi7bwoc/hqdefault.jpg)](https://youtu.be/s5PCMi7bwoc?si=2W32JhznSDeJgtJU)
+(https://youtu.be/s5PCMi7bwoc?si=2W32JhznSDeJgtJU)
 
 Check out our demo video to see Doc+ in action!
 
