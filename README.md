@@ -233,9 +233,6 @@ From `package.json`:
 | Jayesh Dubey                    | https://www.linkedin.com/in/jayesh-dubey823/             |
 | Vijay Vinod Mane                | https://www.linkedin.com/in/vijay-vinod-mane/            |
 | Kshatriya Nandini Kuldeep Singh | https://www.linkedin.com/in/kshatriya-nandini-331a16244/ |
-=======
-
-
 
 Questions or improvements welcome—feel free to open an issue or PR.
 
