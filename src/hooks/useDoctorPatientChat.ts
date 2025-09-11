@@ -269,9 +269,14 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
           },
           (payload) => {
             console.log('🎉 New message received via real-time for session', sessionId, ':', payload);
-            console.log('Message sender_id:', payload.new.sender_id);
-            console.log('Current user id:', user?.id);
-            console.log('Is message from current user?', (payload.new.sender_id === user?.id));
+            console.log('Message data:', {
+              id: payload.new.id,
+              session_id: payload.new.session_id,
+              sender_id: payload.new.sender_id,
+              content: payload.new.content,
+              is_read: payload.new.is_read,
+              created_at: payload.new.created_at
+            });
 
             const newMessage = {
               id: payload.new.id,
@@ -299,11 +304,27 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
           console.log('Real-time subscription status for session', sessionId, ':', status);
           if (err) {
             console.error('Real-time subscription error:', err);
+            console.error('Error details:', {
+              message: err.message,
+              name: err.name,
+              stack: err.stack
+            });
           }
           if (status === 'SUBSCRIBED') {
             console.log('✅ Successfully subscribed to real-time updates for session', sessionId);
           } else if (status === 'CHANNEL_ERROR') {
             console.error('❌ Real-time subscription failed for session', sessionId);
+            console.error('Channel error details:', err);
+            // Try to reconnect after a delay
+            setTimeout(() => {
+              console.log('🔄 Attempting to reconnect real-time subscription...');
+              supabase.removeChannel(channel);
+              // The useEffect will recreate the subscription
+            }, 5000);
+          } else if (status === 'TIMED_OUT') {
+            console.error('❌ Real-time subscription timed out for session', sessionId);
+          } else if (status === 'CLOSED') {
+            console.log('ℹ️ Real-time subscription closed for session', sessionId);
           }
         });
 

@@ -34,6 +34,10 @@ ALTER TABLE public.doctor_patient_messages DISABLE ROW LEVEL SECURITY;
 -- Temporarily disable RLS on doctor_patient_chat_sessions
 ALTER TABLE public.doctor_patient_chat_sessions DISABLE ROW LEVEL SECURITY;
 
+-- Ensure real-time publication includes our tables
+ALTER PUBLICATION supabase_realtime ADD TABLE public.doctor_patient_messages;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.doctor_patient_chat_sessions;
+
 -- Create permissive policies for debugging (REMOVE THESE AFTER DEBUGGING)
 CREATE POLICY "Allow all operations on doctor_patient_chat_sessions for debugging"
 ON public.doctor_patient_chat_sessions
