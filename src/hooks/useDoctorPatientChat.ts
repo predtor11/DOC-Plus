@@ -166,10 +166,19 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
 
     try {
       setLoading(true);
-      console.log('Sending doctor-patient message via ChatAPI:', { sessionId, content, senderId: user.id });
+      const senderId = user.auth_user_id || user.id;
+      console.log('Sending doctor-patient message via ChatAPI:', {
+        sessionId,
+        content,
+        senderId,
+        userAuthState: {
+          id: user.id,
+          auth_user_id: user.auth_user_id
+        }
+      });
 
       // Use ChatAPI which has proper fallback logic
-      const { data, error } = await ChatAPI.sendMessage(sessionId, content, user.id);
+      const { data, error } = await ChatAPI.sendMessage(sessionId, content, senderId);
 
       if (error) {
         console.error('Error sending doctor-patient message via ChatAPI:', error);
