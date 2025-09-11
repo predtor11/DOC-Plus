@@ -195,7 +195,7 @@ export const useMessages = (sessionId: string | null) => {
     console.log('useMessages: Setting up real-time subscription for messages in session:', sessionId);
 
     const channel = supabase
-      .channel(`messages:${sessionId}`)
+      .channel(`ai-messages:${sessionId}`)
       .on(
         'postgres_changes',
         {
