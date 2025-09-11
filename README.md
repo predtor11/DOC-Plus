@@ -11,6 +11,12 @@
 
 Doc+ is a full‑stack TypeScript React application that helps doctors manage patients, collaborate, and leverage AI safely for clinical context, summaries, and guidance. Patients can register (self or invited), view their profile, and interact with their doctor. Doctors gain tooling for structured onboarding, patient linking, and AI‑augmented chat.
 
+## 📺 Demo Video
+
+[![Watch the demo](https://img.youtube.com/vi/s5PCMi7bwoc/hqdefault.jpg)](https://youtu.be/s5PCMi7bwoc?si=2W32JhznSDeJgtJU)
+
+Check out our demo video to see Doc+ in action!
+
 ## 🔍 Core Features
 
 - Role-based experience (Doctor / Patient) with guided onboarding
