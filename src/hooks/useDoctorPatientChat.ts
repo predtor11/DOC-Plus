@@ -308,4 +308,15 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
       supabase.removeChannel(channel);
     };
   }, [sessionId]);
+
+  return {
+    sessions,
+    messages,
+    loading,
+    fetchSessions,
+    fetchMessages,
+    createSession,
+    sendMessage,
+    markMessagesAsRead,
+  };
 };
