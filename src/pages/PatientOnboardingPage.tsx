@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useUser } from '@clerk/clerk-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { User, Heart, Stethoscope } from 'lucide-react';
+import { User, Heart, Stethoscope, AlertCircle } from 'lucide-react';
 
 interface Doctor {
   id: string;
@@ -22,8 +22,11 @@ const PatientOnboardingPage: React.FC = () => {
   const { user } = useUser();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [searchParams] = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [invitedDoctor, setInvitedDoctor] = useState<Doctor | null>(null);
+  const [invitationError, setInvitationError] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     name: user?.fullName || '',
@@ -36,7 +39,49 @@ const PatientOnboardingPage: React.FC = () => {
 
   useEffect(() => {
     loadDoctors();
+    checkInvitation();
   }, []);
+
+  const checkInvitation = async () => {
+    const doctorId = searchParams.get('doctorId');
+    console.log('🔍 PatientOnboardingPage - Checking invitation with doctorId:', doctorId);
+
+    if (!doctorId) {
+      console.log('❌ PatientOnboardingPage - No doctorId parameter found');
+      return;
+    }
+
+    try {
+      console.log('🔍 PatientOnboardingPage - Looking up doctor with user_id:', doctorId);
+
+      // Check if this doctor exists
+      const { data: doctor, error } = await supabase
+        .from('doctors')
+        .select('id, user_id, name, username')
+        .eq('user_id', doctorId)
+        .single();
+
+      console.log('🔍 PatientOnboardingPage - Doctor lookup result:', { doctor, error });
+
+      if (error || !doctor) {
+        console.log('❌ PatientOnboardingPage - Doctor lookup failed:', error);
+        setInvitationError('Invalid invitation link. The doctor may not exist or the invitation may have expired.');
+        return;
+      }
+
+      setInvitedDoctor(doctor);
+      setFormData(prev => ({ ...prev, assignedDoctorId: doctor.user_id }));
+      console.log('✅ PatientOnboardingPage - Doctor found:', doctor.name);
+
+      toast({
+        title: "Invitation Found",
+        description: `You've been invited by Dr. ${doctor.name}`,
+      });
+    } catch (error) {
+      console.error('❌ PatientOnboardingPage - Error checking invitation:', error);
+      setInvitationError('Failed to validate invitation. Please contact your doctor.');
+    }
+  };
 
   const loadDoctors = async () => {
     try {
@@ -70,23 +115,56 @@ const PatientOnboardingPage: React.FC = () => {
         throw new Error('User not authenticated');
       }
 
-      // Create patient profile
-      const { data, error } = await supabase
-        .from('patients')
-        .insert({
+      const patientEmail = user.primaryEmailAddress?.emailAddress;
+      let patientData;
+
+      if (invitedDoctor && patientEmail) {
+        // Update existing patient record from invitation
+        const updateData = {
           clerk_user_id: user.id,
           name: formData.name,
-          email: user.primaryEmailAddress?.emailAddress,
+          age: formData.age ? parseInt(formData.age) : null,
+          gender: formData.gender || null,
+          phone: formData.phone || null,
+          medical_history: formData.medicalHistory || null,
+          invitation_status: 'completed',
+          user_id: user.id,
+        };
+
+        const { data, error } = await supabase
+          .from('patients')
+          .update(updateData as any)
+          .eq('email', patientEmail)
+          .eq('assigned_doctor_id', invitedDoctor.user_id)
+          .eq('invitation_status', 'pending')
+          .select()
+          .single();
+
+        if (error) throw error;
+        patientData = data;
+      } else {
+        // Create new patient profile (regular signup)
+        const insertData = {
+          clerk_user_id: user.id,
+          name: formData.name,
+          email: patientEmail,
           age: formData.age ? parseInt(formData.age) : null,
           gender: formData.gender || null,
           phone: formData.phone || null,
           medical_history: formData.medicalHistory || null,
           assigned_doctor_id: formData.assignedDoctorId || null,
-        })
-        .select()
-        .single();
+          user_id: user.id,
+        };
 
-      if (error) throw error;
+        const { data, error } = await supabase
+          .from('patients')
+          .insert(insertData as any)
+          .select()
+          .single();
+
+        if (error) throw error;
+        patientData = data;
+      }
 
       // Update Clerk user metadata to mark onboarding as complete
       await user.update({
@@ -94,7 +172,7 @@ const PatientOnboardingPage: React.FC = () => {
           ...user.unsafeMetadata,
           role: 'patient',
           onboardingComplete: true,
-          patientProfileId: data.id,
+          patientProfileId: patientData.id,
         },
       });
 
@@ -145,6 +223,15 @@ const PatientOnboardingPage: React.FC = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {invitationError && (
+              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md">
+                <div className="flex items-center gap-2 text-red-800">
+                  <AlertCircle className="h-4 w-4" />
+                  <span className="font-medium">Invitation Error</span>
+                </div>
+                <p className="text-red-700 text-sm mt-1">{invitationError}</p>
+              </div>
+            )}
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Basic Information */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -201,23 +288,36 @@ const PatientOnboardingPage: React.FC = () => {
               {/* Doctor Assignment */}
               <div className="space-y-2">
                 <Label htmlFor="assignedDoctor">Assigned Doctor *</Label>
-                <Select value={formData.assignedDoctorId} onValueChange={(value) => handleInputChange('assignedDoctorId', value)} required>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select your doctor" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {doctors.map((doctor) => (
-                      <SelectItem key={doctor.user_id} value={doctor.user_id}>
-                        <div className="flex items-center gap-2">
-                          <Stethoscope className="h-4 w-4" />
-                          {doctor.name}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {invitedDoctor ? (
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+                    <div className="flex items-center gap-2 text-blue-800">
+                      <Stethoscope className="h-4 w-4" />
+                      <span className="font-medium">Dr. {invitedDoctor.name}</span>
+                      <span className="text-sm text-blue-600">(Invited by this doctor)</span>
+                    </div>
+                  </div>
+                ) : (
+                  <Select value={formData.assignedDoctorId} onValueChange={(value) => handleInputChange('assignedDoctorId', value)} required>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select your doctor" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {doctors.map((doctor) => (
+                        <SelectItem key={doctor.user_id} value={doctor.user_id}>
+                          <div className="flex items-center gap-2">
+                            <Stethoscope className="h-4 w-4" />
+                            {doctor.name}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
                 <p className="text-sm text-muted-foreground">
-                  Choose the doctor who will be managing your care
+                  {invitedDoctor
+                    ? "You've been invited by this doctor to join their practice"
+                    : "Choose the doctor who will be managing your care"
+                  }
                 </p>
               </div>
 

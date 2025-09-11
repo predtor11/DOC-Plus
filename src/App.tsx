@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import DashboardLayout from "./components/DashboardLayout";
 import DoctorDashboard from "./pages/DoctorDashboard";
@@ -21,8 +21,52 @@ import DoctorOnboarding from "./components/DoctorOnboarding";
 
 // Import Clerk components
 import { SignedIn, SignedOut, SignIn, SignUp, useClerk } from '@clerk/clerk-react';
+import React from 'react';
 
 const queryClient = new QueryClient();
+
+// AuthRedirect component to handle post-authentication redirects
+const AuthRedirect: React.FC = () => {
+  const { user } = useClerk();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  React.useEffect(() => {
+    if (user) {
+      // If user is authenticated, check if there's a redirect in the URL
+      const searchParams = new URLSearchParams(location.search);
+      const redirectTo = searchParams.get('redirect');
+
+      if (redirectTo) {
+        // If there's a specific redirect, use it
+        navigate(redirectTo);
+      } else {
+        // Otherwise, redirect to the default authenticated route
+        navigate('/');
+      }
+    }
+  }, [user, location, navigate]);
+
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Completing sign in...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary mx-auto mb-4"></div>
+        <p className="text-muted-foreground">Redirecting...</p>
+      </div>
+    </div>
+  );
+};
 
 const AppRoutes = () => {
   const { user, isLoading, isCheckingProfile } = useAuth();
@@ -98,6 +142,7 @@ const AppRoutes = () => {
       <Route path="/onboarding/select-role" element={<RoleSelectionPage />} />
       <Route path="/onboarding/doctor" element={<DoctorOnboarding />} />
       <Route path="/onboarding/patient" element={<PatientOnboardingPage />} />
+      <Route path="/patient-onboarding" element={<PatientOnboardingPage />} />
       <Route path="/auth-redirect" element={<Navigate to="/" replace />} />
 
       {/* Authenticated routes */}
@@ -286,7 +331,7 @@ const AppContent = () => {
                 <SignUp
                   routing="virtual"
                   signInUrl="/"
-                  redirectUrl="/auth-redirect"
+                  redirectUrl={window.location.pathname + window.location.search}
                   appearance={{
                     elements: {
                       formButtonPrimary: 'bg-blue-600 hover:bg-blue-700',
@@ -299,6 +344,30 @@ const AppContent = () => {
               </div>
             </div>
           } />
+          <Route path="/patient-onboarding" element={
+            <div className="min-h-screen flex items-center justify-center bg-background p-4">
+              <div className="w-full max-w-md bg-white rounded-lg shadow-lg p-6">
+                <div className="text-center mb-6">
+                  <h1 className="text-2xl font-bold text-gray-900">Welcome to Doc+</h1>
+                  <p className="text-gray-600 mt-2">Please sign in to access your invitation</p>
+                </div>
+                <SignIn
+                  routing="virtual"
+                  signUpUrl="/sign-up"
+                  redirectUrl={window.location.pathname + window.location.search}
+                  appearance={{
+                    elements: {
+                      formButtonPrimary: 'bg-blue-600 hover:bg-blue-700',
+                      card: 'shadow-none',
+                      headerTitle: 'hidden',
+                      headerSubtitle: 'hidden'
+                    }
+                  }}
+                />
+              </div>
+            </div>
+          } />
+          <Route path="/auth-redirect" element={<AuthRedirect />} />
           <Route path="*" element={
             <div className="min-h-screen flex items-center justify-center bg-background p-4">
               <div className="w-full max-w-md bg-white rounded-lg shadow-lg p-6">
