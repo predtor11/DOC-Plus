@@ -59,29 +59,9 @@ const PatientDoctorChat = () => {
     markMessagesAsRead: markDoctorPatientMessagesAsRead,
   } = useDoctorPatientChat(currentSession?.id || null);
 
-  // Debug: Log when sessions change
-  useEffect(() => {
-    console.log('doctorPatientSessions updated:', doctorPatientSessions.length, 'sessions');
-    doctorPatientSessions.forEach(session => {
-      console.log('Session:', {
-        id: session.id,
-        doctor_id: session.doctor_id,
-        patient_id: session.patient_id,
-        title: session.title
-      });
-    });
-  }, [doctorPatientSessions]);
-
   // Load assigned doctor information
   useEffect(() => {
     if (user?.id) {
-      console.log('PatientDoctorChat: User info:', {
-        id: user.id,
-        user_id: user.user_id,
-        name: user.name,
-        email: user.email,
-        role: user.role
-      });
       loadDoctorInfo();
     } else {
       console.log('PatientDoctorChat: No user.id available');
@@ -108,12 +88,9 @@ const PatientDoctorChat = () => {
 
       if (patientError) {
         console.error('Error fetching patient data:', patientError);
-        console.log('Patient user_id being searched:', user.id);
-        console.log('Patient error details:', patientError);
 
         if (patientError.code === 'PGRST116') {
           // Patient record doesn't exist - create it automatically
-          console.log('Creating patient record for user:', user.id);
 
           // First, try to find an available doctor to assign - use safe bulk query approach
           const { data: availableDoctors, error: findDoctorError } = await supabase
