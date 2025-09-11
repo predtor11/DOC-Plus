@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { User, Session } from '@supabase/supabase-js';
 
 // Import Clerk components for OAuth
-import { SignedIn, SignedOut, SignIn, SignUp, useUser, useClerk } from '@clerk/clerk-react';
+import { SignedIn, SignedOut, SignIn, SignUp, useUser, useClerk, useAuth as useClerkAuth } from '@clerk/clerk-react';
 
 interface DoctorProfile {
   id: string;
@@ -61,6 +61,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user: clerkUser, isLoaded: isClerkLoaded } = useUser();
   const { signOut: clerkSignOut } = useClerk();
+  const { getToken } = useClerkAuth();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -94,8 +95,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log('🚀 Setting up Supabase OAuth for Clerk user:', clerkUser.id);
 
-      // Get the JWT token from Clerk
-      const token = await clerkUser.getToken({ template: 'supabase' }) || await clerkUser.getToken();
+      // Get the JWT token from Clerk using the proper auth hook
+      const token = await getToken({ template: 'supabase' }) || await getToken();
       console.log('🔑 Got Clerk JWT token:', token ? '***' + token.slice(-10) : 'null');
 
       if (token) {
@@ -195,57 +196,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     try {
       // Try to find existing profiles using different matching strategies
-
-      // Strategy 0: Check if this is an invited patient by email
-      const clerkEmail = clerkUser?.primaryEmailAddress?.emailAddress;
-      if (clerkEmail) {
-        console.log('🔍 Strategy 0: Looking for invited patient by email:', clerkEmail);
-
-        try {
-          const { data: patients } = await supabase
-            .from('patients')
-            .select('id, user_id, name, email, age, gender, phone, medical_history, assigned_doctor_id, invitation_id')
-            .eq('email', clerkEmail)
-            .limit(5);
-
-          const invitedPatient = patients?.find(p => p.invitation_id || p.email === clerkEmail);
-
-          if (invitedPatient) {
-            console.log('✅ Found invited patient by email, updating with Clerk user ID');
-
-            // Update the patient record with the actual Clerk user ID
-            await supabase
-              .from('patients')
-              .update({
-                user_id: clerkUserId,
-                clerk_user_id: clerkUserId,
-                invitation_id: null // Clear invitation_id since it's been used
-              })
-              .eq('id', invitedPatient.id);
-
-            const userData = {
-              id: clerkUserId,
-              user_id: invitedPatient.id,
-              auth_user_id: clerkUserId,
-              name: invitedPatient.name,
-              email: invitedPatient.email,
-              role: 'patient' as const,
-              age: invitedPatient.age,
-              gender: invitedPatient.gender,
-              phone: invitedPatient.phone,
-              medical_history: invitedPatient.medical_history,
-              assigned_doctor_id: invitedPatient.assigned_doctor_id,
-            };
-            console.log('🔄 Setting user data for invited patient:', userData);
-            setUser(userData);
-            setIsLoading(false);
-            setIsCheckingProfile(false);
-            return;
-          }
-        } catch (error) {
-          console.log('⚠️ Error checking for invited patient by email:', error);
-        }
-      }
 
       // Strategy 1: Try to match by clerk_user_id (if migration was applied)
       console.log('🔍 Strategy 1: Looking for profiles by clerk_user_id');
