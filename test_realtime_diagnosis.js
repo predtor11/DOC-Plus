@@ -18,7 +18,7 @@ async function testDatabaseConnection() {
   console.log('1️⃣ Testing database connection...');
   try {
     const { data, error } = await supabase
-      .from('messages')
+      .from('doctor_patient_messages')
       .select('count', { count: 'exact', head: true });
 
     if (error) {
@@ -26,7 +26,7 @@ async function testDatabaseConnection() {
       return false;
     }
 
-    console.log('✅ Database connection OK, messages count:', data);
+    console.log('✅ Database connection OK, doctor_patient_messages count:', data);
     return true;
   } catch (err) {
     console.error('❌ Database connection error:', err);
@@ -44,7 +44,7 @@ function testRealtimeSubscription() {
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
-        table: 'messages'
+        table: 'doctor_patient_messages'
       }, (payload) => {
         console.log('🎉 Realtime event received:', payload);
         resolve(true);
@@ -85,20 +85,20 @@ async function testMessageInsertion() {
   try {
     // First, get an existing session ID
     const { data: sessions, error: sessionError } = await supabase
-      .from('chat_sessions')
+      .from('doctor_patient_chat_sessions')
       .select('id')
       .limit(1);
 
     if (sessionError || !sessions || sessions.length === 0) {
-      console.log('⚠️ No existing sessions found, skipping insertion test');
+      console.log('⚠️ No existing doctor-patient sessions found, skipping insertion test');
       return true;
     }
 
     const sessionId = sessions[0].id;
-    console.log('Using session ID:', sessionId);
+    console.log('Using doctor-patient session ID:', sessionId);
 
     const { data, error } = await supabase
-      .from('messages')
+      .from('doctor_patient_messages')
       .insert({
         session_id: sessionId,
         sender_id: 'test-user-' + Date.now(),

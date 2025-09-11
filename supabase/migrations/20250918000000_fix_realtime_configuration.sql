@@ -1,13 +1,13 @@
--- Fix realtime configuration for messages table
--- This migration ensures proper realtime setup
+-- Fix realtime configuration for doctor_patient_messages table
+-- This migration ensures proper realtime setup for doctor-patient chat
 
 -- Drop existing publication if it exists
 DROP PUBLICATION IF EXISTS supabase_realtime;
 
 -- Create new publication for realtime
-CREATE PUBLICATION supabase_realtime FOR TABLE messages;
+CREATE PUBLICATION supabase_realtime FOR TABLE doctor_patient_messages;
 
--- Enable realtime for the messages table
+-- Enable realtime for the doctor_patient_messages table
 -- This should be done through the Supabase dashboard, but we'll document it here
 
 -- Alternative approach: Use the supabase_realtime publication
@@ -25,8 +25,8 @@ BEGIN
     END IF;
 END $$;
 
--- Add the messages table to the publication
-ALTER PUBLICATION supabase_realtime ADD TABLE messages;
+-- Add the doctor_patient_messages table to the publication
+ALTER PUBLICATION supabase_realtime ADD TABLE doctor_patient_messages;
 
 -- Verify the table was added
 DO $$
@@ -35,16 +35,16 @@ BEGIN
         SELECT 1
         FROM pg_publication_tables
         WHERE pubname = 'supabase_realtime'
-        AND tablename = 'messages'
+        AND tablename = 'doctor_patient_messages'
     ) THEN
-        RAISE NOTICE 'messages table successfully added to supabase_realtime publication';
+        RAISE NOTICE 'doctor_patient_messages table successfully added to supabase_realtime publication';
     ELSE
-        RAISE EXCEPTION 'Failed to add messages table to publication';
+        RAISE EXCEPTION 'Failed to add doctor_patient_messages table to publication';
     END IF;
 END $$;
 
 -- Note: After running this migration, you may need to:
 -- 1. Go to Supabase Dashboard > Database > Replication
--- 2. Ensure the messages table is selected
+-- 2. Ensure the doctor_patient_messages table is selected
 -- 3. Ensure INSERT events are enabled
 -- 4. Restart the realtime service if necessary

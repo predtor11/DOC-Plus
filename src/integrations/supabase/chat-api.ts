@@ -108,16 +108,16 @@ export class ChatAPI {
 
       console.log('Creating/finding doctor-patient chat session with data:', { doctorId, patientId, title });
 
-      // Skip the problematic doctor_patient_chat_sessions table and go straight to the working chat_sessions table
-      console.log('Using chat_sessions table for doctor-patient session creation (skipping problematic doctor_patient_chat_sessions)');
+      // Use the dedicated doctor_patient_chat_sessions table
+      console.log('Using doctor_patient_chat_sessions table for doctor-patient session creation');
 
       // First, try to find an existing session between these users
       console.log('Checking for existing session between doctor and patient...');
-      const { data: existingSessions, error: findError } = await supabase
-        .from('chat_sessions')
+      const { data: existingSessions, error: findError } = await (supabase as any)
+        .from('doctor_patient_chat_sessions')
         .select('*')
-        .eq('session_type', 'doctor-patient')
-        .or(`and(participant_1_id.eq.${doctorId},participant_2_id.eq.${patientId}),and(participant_1_id.eq.${patientId},participant_2_id.eq.${doctorId})`)
+        .eq('doctor_id', doctorId)
+        .eq('patient_id', patientId)
         .order('created_at', { ascending: false })
         .limit(1);
 
@@ -131,20 +131,19 @@ export class ChatAPI {
 
       if (existingSessions && existingSessions.length > 0) {
         console.log('Found existing session, returning it:', existingSessions[0].id);
-        return { data: existingSessions[0] as ChatSession, error: null };
+        return { data: existingSessions[0] as any, error: null };
       }
 
       console.log('No existing session found, creating new one...');
 
       const sessionData = {
-        session_type: 'doctor-patient' as const,
-        participant_1_id: doctorId,
-        participant_2_id: patientId,
+        doctor_id: doctorId,
+        patient_id: patientId,
         title: title || 'Doctor-Patient Chat',
       };
 
-      const { data, error } = await supabase
-        .from('chat_sessions')
+      const { data, error } = await (supabase as any)
+        .from('doctor_patient_chat_sessions')
         .insert(sessionData)
         .select()
         .single();
@@ -183,23 +182,15 @@ export class ChatAPI {
         };
       }
 
-      // First, get the session to determine the session type
-      const { data: session, error: sessionError } = await supabase
-        .from('chat_sessions')
-        .select('session_type')
+      // First, check if this is a doctor-patient session by looking at the doctor_patient_chat_sessions table
+      const { data: dpSession, error: dpSessionError } = await (supabase as any)
+        .from('doctor_patient_chat_sessions')
+        .select('id')
         .eq('id', sessionId)
         .single();
 
-      if (sessionError) {
-        console.error('Error fetching session:', sessionError);
-        return {
-          data: null,
-          error: { message: 'Failed to fetch session information', code: sessionError.code }
-        };
-      }
-
-      const isAiSession = session?.session_type?.includes('ai') || false;
-      console.log('ChatAPI.sendMessage - Session type:', session?.session_type, 'Is AI session:', isAiSession, 'Session ID:', sessionId);
+      const isDoctorPatientSession = !dpSessionError && dpSession !== null;
+      console.log('ChatAPI.sendMessage - Is doctor-patient session:', isDoctorPatientSession, 'Session ID:', sessionId);
 
       const messageData = {
         session_id: sessionId,
@@ -219,7 +210,19 @@ export class ChatAPI {
       let data, error;
 
       // Use appropriate table based on session type
-      if (isAiSession) {
+      if (isDoctorPatientSession) {
+        // For doctor-patient sessions, use the dedicated doctor_patient_messages table
+        console.log('Using doctor_patient_messages table for doctor-patient session, sessionId:', sessionId);
+        const result = await (supabase as any)
+          .from('doctor_patient_messages')
+          .insert(doctorPatientMessageData)
+          .select()
+          .single();
+
+        data = result.data;
+        error = result.error;
+        console.log('Doctor-patient messages table insert result:', { data: !!data, error: error?.message });
+      } else {
         // For AI sessions, use the regular messages table
         console.log('Using messages table for AI session, sessionId:', sessionId);
         const result = await supabase
@@ -231,18 +234,6 @@ export class ChatAPI {
         data = result.data;
         error = result.error;
         console.log('Messages table insert result:', { data: !!data, error: error?.message });
-      } else {
-        // For doctor-patient sessions, use the regular messages table (skip doctor_patient_messages for now)
-        console.log('Using messages table for doctor-patient session (skipping doctor_patient_messages), sessionId:', sessionId);
-        const result = await supabase
-          .from('messages')
-          .insert(messageData)
-          .select()
-          .single();
-
-        data = result.data;
-        error = result.error;
-        console.log('Messages table insert result for doctor-patient:', { data: !!data, error: error?.message });
       }
 
       if (error) {
@@ -268,31 +259,23 @@ export class ChatAPI {
    */
   static async markMessagesAsRead(sessionId: string, userId: string): Promise<{ success: boolean; error: ChatAPIError | null }> {
     try {
-      // First, get the session to determine the session type
-      const { data: session, error: sessionError } = await supabase
-        .from('chat_sessions')
-        .select('session_type')
+      // First, check if this is a doctor-patient session
+      const { data: dpSession, error: dpSessionError } = await (supabase as any)
+        .from('doctor_patient_chat_sessions')
+        .select('id')
         .eq('id', sessionId)
         .single();
 
-      if (sessionError) {
-        console.error('Error fetching session for mark as read:', sessionError);
-        return {
-          success: false,
-          error: { message: 'Failed to fetch session information', code: sessionError.code }
-        };
-      }
-
-      const isAiSession = session?.session_type?.includes('ai') || false;
-      console.log('Marking messages as read for session type:', session?.session_type, 'Is AI session:', isAiSession);
+      const isDoctorPatientSession = !dpSessionError && dpSession !== null;
+      console.log('Marking messages as read for doctor-patient session:', isDoctorPatientSession);
 
       let error;
 
-      if (isAiSession) {
-        // For AI sessions, use the regular messages table
-        console.log('Using messages table for marking as read');
-        const result = await supabase
-          .from('messages')
+      if (isDoctorPatientSession) {
+        // For doctor-patient sessions, use the doctor_patient_messages table
+        console.log('Using doctor_patient_messages table for marking as read');
+        const result = await (supabase as any)
+          .from('doctor_patient_messages')
           .update({ is_read: true })
           .eq('session_id', sessionId)
           .neq('sender_id', userId)
@@ -300,8 +283,8 @@ export class ChatAPI {
 
         error = result.error;
       } else {
-        // For doctor-patient sessions, use the regular messages table (skip doctor_patient_messages for now)
-        console.log('Using messages table for marking doctor-patient messages as read');
+        // For AI sessions, use the regular messages table
+        console.log('Using messages table for marking as read');
         const result = await supabase
           .from('messages')
           .update({ is_read: true })
@@ -333,40 +316,58 @@ export class ChatAPI {
    */
   static async getUnreadMessageCount(userId: string): Promise<{ count: number; error: ChatAPIError | null }> {
     try {
-      // First get user's session IDs
+      // Get user's doctor-patient session IDs
+      const { data: dpSessions, error: dpSessionError } = await (supabase as any)
+        .from('doctor_patient_chat_sessions')
+        .select('id')
+        .or(`doctor_id.eq.${userId},patient_id.eq.${userId}`);
+
+      // Get user's regular chat session IDs
       const { data: sessions, error: sessionError } = await supabase
         .from('chat_sessions')
         .select('id')
         .or(`participant_1_id.eq.${userId},participant_2_id.eq.${userId}`);
 
-      if (sessionError) {
+      if ((dpSessionError && sessionError) || (!dpSessions && !sessions)) {
         return {
           count: 0,
-          error: { message: 'Failed to fetch sessions', code: sessionError.code }
+          error: { message: 'Failed to fetch sessions' }
         };
       }
 
-      if (!sessions || sessions.length === 0) {
-        return { count: 0, error: null };
+      let totalUnreadCount = 0;
+
+      // Count unread messages in doctor_patient_messages table
+      if (dpSessions && dpSessions.length > 0) {
+        const dpSessionIds = dpSessions.map(s => s.id);
+        const { count: dpCount, error: dpCountError } = await (supabase as any)
+          .from('doctor_patient_messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('is_read', false)
+          .neq('sender_id', userId)
+          .in('session_id', dpSessionIds);
+
+        if (!dpCountError && dpCount !== null) {
+          totalUnreadCount += dpCount;
+        }
       }
 
-      const sessionIds = sessions.map(s => s.id);
+      // Count unread messages in regular messages table
+      if (sessions && sessions.length > 0) {
+        const sessionIds = sessions.map(s => s.id);
+        const { count, error } = await supabase
+          .from('messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('is_read', false)
+          .neq('sender_id', userId)
+          .in('session_id', sessionIds);
 
-      const { count, error } = await supabase
-        .from('messages')
-        .select('*', { count: 'exact', head: true })
-        .eq('is_read', false)
-        .neq('sender_id', userId)
-        .in('session_id', sessionIds);
-
-      if (error) {
-        return {
-          count: 0,
-          error: { message: 'Failed to fetch unread count', code: error.code }
-        };
+        if (!error && count !== null) {
+          totalUnreadCount += count;
+        }
       }
 
-      return { count: count || 0, error: null };
+      return { count: totalUnreadCount, error: null };
     } catch (err) {
       return {
         count: 0,

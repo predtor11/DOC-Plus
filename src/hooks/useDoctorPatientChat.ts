@@ -42,8 +42,8 @@ export const useDoctorPatientChat = (sessionId: string | null): HookReturn => {
   const [loading, setLoading] = useState(false);
 
   // Constants
-  const CHAT_SESSIONS_TABLE = 'chat_sessions';
-  const MESSAGES_TABLE = 'messages';
+  const DOCTOR_PATIENT_SESSIONS_TABLE = 'doctor_patient_chat_sessions';
+  const DOCTOR_PATIENT_MESSAGES_TABLE = 'doctor_patient_messages';
 
   // Early return if hook dependencies are not ready
   if (!user) {
@@ -68,11 +68,10 @@ export const useDoctorPatientChat = (sessionId: string | null): HookReturn => {
       setLoading(true);
       console.log('Fetching doctor-patient sessions for user:', user.id);
 
-      const { data, error } = await supabase
-        .from(CHAT_SESSIONS_TABLE)
+      const { data, error } = await (supabase as any)
+        .from(DOCTOR_PATIENT_SESSIONS_TABLE)
         .select('*')
-        .eq('session_type', 'doctor-patient')
-        .or(`participant_1_id.eq.${user.id},participant_2_id.eq.${user.id}`)
+        .or(`doctor_id.eq.${user.id},patient_id.eq.${user.id}`)
         .order('last_message_at', { ascending: false, nullsFirst: false });
 
       if (error) {
@@ -84,10 +83,10 @@ export const useDoctorPatientChat = (sessionId: string | null): HookReturn => {
       console.log('Sessions fetched successfully:', data?.length || 0, 'sessions');
       
       // Transform data to match our interface
-      const transformedSessions = (data || []).map(session => ({
+      const transformedSessions = (data || []).map((session: any) => ({
         id: session.id,
-        doctor_id: session.participant_1_id,
-        patient_id: session.participant_2_id,
+        doctor_id: session.doctor_id,
+        patient_id: session.patient_id,
         title: session.title,
         last_message_at: session.last_message_at,
         created_at: session.created_at,
@@ -113,8 +112,8 @@ export const useDoctorPatientChat = (sessionId: string | null): HookReturn => {
       setLoading(true);
       console.log('Fetching doctor-patient messages for session:', sessionId);
 
-      const { data, error } = await supabase
-        .from(MESSAGES_TABLE)
+      const { data, error } = await (supabase as any)
+        .from(DOCTOR_PATIENT_MESSAGES_TABLE)
         .select('*')
         .eq('session_id', sessionId)
         .order('created_at', { ascending: true });
@@ -127,7 +126,7 @@ export const useDoctorPatientChat = (sessionId: string | null): HookReturn => {
 
       console.log('Messages fetched successfully:', data?.length || 0, 'messages');
 
-      const transformedMessages = (data || []).map(msg => ({
+      const transformedMessages = (data || []).map((msg: any) => ({
         id: msg.id,
         session_id: msg.session_id,
         sender_id: msg.sender_id,
@@ -223,8 +222,8 @@ export const useDoctorPatientChat = (sessionId: string | null): HookReturn => {
     try {
       console.log('Marking messages as read:', { sessionId });
 
-      const { error } = await supabase
-        .from(MESSAGES_TABLE)
+      const { error } = await (supabase as any)
+        .from(DOCTOR_PATIENT_MESSAGES_TABLE)
         .update({ is_read: true })
         .eq('session_id', sessionId)
         .neq('sender_id', user.id)
@@ -284,7 +283,7 @@ export const useDoctorPatientChat = (sessionId: string | null): HookReturn => {
         {
           event: 'INSERT',
           schema: 'public',
-          table: MESSAGES_TABLE,
+          table: DOCTOR_PATIENT_MESSAGES_TABLE,
           filter: `session_id=eq.${sessionId}`
         },
         (payload) => {
