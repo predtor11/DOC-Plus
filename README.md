@@ -198,17 +198,17 @@ From `package.json`:
 3. Commit changes: `git commit -m "feat: add xyz"`
 4. Open PR with context & screenshots
 
-## 👥 Team
+## 👥 Contact our Team
 
-| Name                            | Role (Suggested)          | LinkedIn                                                 |
-| ------------------------------- | ------------------------- | -------------------------------------------------------- |
-| Akshat Barve                    | Full Stack / Product Lead | https://www.linkedin.com/in/akshatbarve/                 |
-| Arnish Baruah                   | Backend & Infrastructure  | https://www.linkedin.com/in/arnishbaruah/                |
-| Jayesh Dubey                    | Frontend & UX Engineering | https://www.linkedin.com/in/jayesh-dubey823/             |
-| Vijay Vinod Mane                | AI & Systems Integration  | https://www.linkedin.com/in/vijay-vinod-mane/            |
-| Kshatriya Nandini Kuldeep Singh | Clinical Workflow & QA    | https://www.linkedin.com/in/kshatriya-nandini-331a16244/ |
+| Name                            | LinkedIn                                                 |
+| ------------------------------- | -------------------------------------------------------- |
+| Akshat Barve                    | https://www.linkedin.com/in/akshatbarve/                 |
+| Arnish Baruah                   | https://www.linkedin.com/in/arnishbaruah/                |
+| Jayesh Dubey                    | https://www.linkedin.com/in/jayesh-dubey823/             |
+| Vijay Vinod Mane                | https://www.linkedin.com/in/vijay-vinod-mane/            |
+| Kshatriya Nandini Kuldeep Singh | https://www.linkedin.com/in/kshatriya-nandini-331a16244/ |
 
-Feel free to adjust role labels as needed.
+
 
 Questions or improvements welcome—feel free to open an issue or PR.
 
