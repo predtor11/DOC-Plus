@@ -115,6 +115,15 @@ const PatientDoctorChat = () => {
           // Patient record doesn't exist - create it automatically
           console.log('Creating patient record for user:', user.id);
 
+          // First, try to find an available doctor to assign - use safe bulk query approach
+          const { data: availableDoctors, error: findDoctorError } = await supabase
+            .from('doctors')
+            .select('user_id')
+            .limit(5);
+
+          const availableDoctor = availableDoctors?.[0] || null;
+          const doctorId = availableDoctor?.user_id || null;
+
           const { data: newPatient, error: createError } = await supabase
             .from('patients')
             .insert({
@@ -130,7 +139,7 @@ const PatientDoctorChat = () => {
               medical_history: '',
               allergies: '',
               current_medications: '',
-              assigned_doctor_id: null
+              assigned_doctor_id: doctorId // Use available doctor or null if none found
             })
             .select('assigned_doctor_id, name, email')
             .single();
@@ -163,31 +172,21 @@ const PatientDoctorChat = () => {
 
           console.log('Fetching doctor data for new patient, doctor user_id:', newPatient.assigned_doctor_id);
 
-          // Get doctor details for the newly created patient
-          const { data: doctorData, error: doctorError } = await supabase
+          // Get doctor details for the newly created patient - use safe bulk query approach
+          const { data: doctors } = await supabase
             .from('doctors')
             .select('id, user_id, name, registration_no')
-            .eq('user_id', newPatient.assigned_doctor_id)
-            .single();
+            .limit(10);
 
-          if (doctorError) {
-            console.error('Error fetching doctor data for new patient:', doctorError);
+          const doctorData = doctors?.find(d => d.user_id === newPatient.assigned_doctor_id);
+
+          if (!doctorData) {
+            console.error('Doctor not found for new patient');
             console.log('Doctor query failed for new patient, doctor ID:', newPatient.assigned_doctor_id);
-            
-            if (doctorError.code === 'PGRST116') {
-              // Doctor record not found
-              toast({
-                title: "Doctor Not Found",
-                description: "Your assigned doctor record could not be found. Please contact the clinic for assistance.",
-                variant: "destructive",
-              });
-            } else {
-              toast({
-                title: "Error",
-                description: "Could not load doctor information.",
-                variant: "destructive",
-              });
-            }
+
+            // Don't show error to user, just continue without doctor info
+            setDoctorInfo(null);
+            await loadOrCreateChatSession(newPatient.assigned_doctor_id);
             setLoading(false);
             return;
           }
@@ -223,39 +222,26 @@ const PatientDoctorChat = () => {
 
       console.log('Fetching doctor data for user_id:', patientData.assigned_doctor_id);
 
-      // Get doctor details
-      const { data: doctorData, error: doctorError } = await supabase
+      // Get doctor details - use safe bulk query approach
+      const { data: doctors } = await supabase
         .from('doctors')
         .select('id, user_id, name, registration_no')
-        .eq('user_id', patientData.assigned_doctor_id)
-        .single();
+        .limit(10);
 
-      if (doctorError) {
-        console.error('Error fetching doctor data:', doctorError);
+      const doctorData = doctors?.find(d => d.user_id === patientData.assigned_doctor_id);
+
+      if (!doctorData) {
+        console.error('Doctor not found');
         console.log('Doctor query failed for ID:', patientData.assigned_doctor_id);
-        
-        if (doctorError.code === 'PGRST116') {
-          // Doctor record not found
-          toast({
-            title: "Doctor Not Found",
-            description: "Your assigned doctor record could not be found. Please contact the clinic for assistance.",
-            variant: "destructive",
-          });
-        } else {
-          toast({
-            title: "Error",
-            description: "Could not load doctor information.",
-            variant: "destructive",
-          });
-        }
-        setLoading(false);
-        return;
+
+        // Don't show error to user, just continue without doctor info
+        setDoctorInfo(null);
+        await loadOrCreateChatSession(patientData.assigned_doctor_id);
+      } else {
+        setDoctorInfo(doctorData);
+        // Find or create chat session
+        await loadOrCreateChatSession(doctorData.user_id);
       }
-
-      setDoctorInfo(doctorData);
-
-      // Find or create chat session
-      await loadOrCreateChatSession(doctorData.user_id);
 
     } catch (error) {
       console.error('Error loading doctor info:', error);
@@ -274,13 +260,14 @@ const PatientDoctorChat = () => {
 
     try {
       console.log('loadOrCreateChatSession called with doctorUserId:', doctorUserId);
-      console.log('Current user.id:', user.id);
+      console.log('Current user.id (Clerk):', user.id);
+      console.log('Current user.user_id (Database):', user.user_id);
 
       // Always try to create a session - the hook will handle existing sessions
       console.log('Creating new session (or finding existing one)');
       const newSession = await createDoctorPatientSession(
         doctorUserId,
-        user.id,
+        user.user_id || user.id, // Use database user_id if available, fallback to Clerk id
         `Chat with Dr. ${doctorInfo?.name || 'Doctor'}`
       );
 

@@ -38,7 +38,7 @@ const PatientProfile = () => {
       const { data, error } = await supabase
         .from('patients')
         .select('*')
-        .eq('user_id', user.user_id)
+        .eq('user_id', user.id) // Use Clerk user ID to match patients.user_id column
         .single();
 
       if (error) throw error;
@@ -76,7 +76,7 @@ const PatientProfile = () => {
           emergency_contact_name: profileData.emergency_contact_name,
           emergency_contact_phone: profileData.emergency_contact_phone,
         })
-        .eq('user_id', user.user_id);
+        .eq('user_id', user.id); // Use Clerk user ID to match patients.user_id column
 
       if (error) throw error;
 

@@ -18,7 +18,7 @@ export const useChatSessions = (sessionType?: string) => {
       let query = supabase
         .from('chat_sessions')
         .select('*')
-        .or(`participant_1_id.eq.${user.id},participant_2_id.eq.${user.id}`) // Use auth user ID
+        .or(`participant_1_id.eq.${user.auth_user_id || user.id},participant_2_id.eq.${user.auth_user_id || user.id}`) // Use auth user ID
         .order('last_message_at', { ascending: false });
 
       if (sessionType) {
@@ -42,7 +42,7 @@ export const useChatSessions = (sessionType?: string) => {
     try {
       const sessionData = {
         session_type: sessionType,
-        participant_1_id: user.id, // Use auth user ID
+        participant_1_id: user.auth_user_id || user.id, // Use auth user ID
         participant_2_id: participantId || null,
         title: title || `New ${sessionType.replace('-', ' ')} session`,
       };
@@ -92,6 +92,7 @@ export const useChatSessions = (sessionType?: string) => {
 };
 
 export const useMessages = (sessionId: string | null) => {
+  const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -136,17 +137,15 @@ export const useMessages = (sessionId: string | null) => {
 
     console.log('sendMessage called with:', { content, isAiMessage, sessionId });
 
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      console.log('Auth user:', user);
-      if (!user) {
-        console.error('No authenticated user found');
-        return null;
-      }
+    if (!user) {
+      console.error('No authenticated user found from AuthContext');
+      return null;
+    }
 
+    try {
       const messageData = {
         session_id: sessionId,
-        sender_id: user.id,
+        sender_id: user.auth_user_id || user.id, // Use auth_user_id for database compatibility
         content,
         is_ai_message: isAiMessage,
       };

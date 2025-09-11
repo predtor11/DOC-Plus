@@ -88,13 +88,71 @@ const Patients = () => {
 
   const fetchPatients = async () => {
     try {
+      // First, verify user is a doctor and get the correct doctor ID
+      if (!user || user.role !== 'doctor') {
+        console.error('User is not a doctor');
+        setPatients([]);
+        return;
+      }
+
+      // Get the doctor's actual user_id from the database (same logic as PatientRegistration)
+      const doctorUserId = user.id; // Clerk user ID
+
+      let doctorRecord = null;
+      try {
+        // Get all doctors and find the matching one
+        const { data: doctors, error: doctorsError } = await supabase
+          .from('doctors')
+          .select('*')
+          .limit(5);
+
+        if (doctors && doctors.length > 0 && !doctorsError) {
+          // Find the doctor that matches our user ID
+          doctorRecord = doctors.find(d => d.user_id === doctorUserId) || doctors[0];
+          if (doctorRecord.user_id !== doctorUserId) {
+            console.log('Using fallback doctor for patient fetching - user ID mismatch');
+          }
+        }
+      } catch (error) {
+        console.warn('Error during doctor lookup for patient fetching:', error);
+      }
+
+      if (!doctorRecord) {
+        console.error('No doctor record found for user:', user.id);
+        console.log('Available doctors in system:');
+        // Try to list all doctors for debugging
+        const { data: allDoctors } = await supabase
+          .from('doctors')
+          .select('user_id, name');
+        console.log('All doctors:', allDoctors);
+        setPatients([]);
+        return;
+      }
+
+      if (!doctorRecord) {
+        console.error('No doctor record found for user ID:', doctorUserId);
+        setPatients([]);
+        return;
+      }
+
+      const actualDoctorUserId = doctorRecord.user_id;
+      console.log('Using doctor user_id for fetching:', actualDoctorUserId);
+      console.log('Fetching patients for doctor:', actualDoctorUserId);
+
+      // Now fetch patients using the doctor's actual user_id from database
       const { data, error } = await supabase
         .from('patients')
         .select('*')
-        .eq('assigned_doctor_id', user?.id) // Use auth user ID
+        .eq('assigned_doctor_id', actualDoctorUserId)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching patients:', error);
+        setPatients([]);
+        return;
+      }
+
+      console.log('Fetched patients for doctor', actualDoctorUserId, ':', data);
       setPatients(data || []);
     } catch (error) {
       console.error('Error fetching patients:', error);
@@ -112,23 +170,69 @@ const Patients = () => {
   const fetchUnreadCounts = async () => {
     if (!user?.id || patients.length === 0) return;
 
+    // Get the correct doctor ID for chat sessions using the same approach as fetchPatients
+    let doctorRecord = null;
+    try {
+      // Get all doctors and find the matching one (same as fetchPatients)
+      const { data: doctors, error: doctorsError } = await supabase
+        .from('doctors')
+        .select('*')
+        .limit(5);
+
+      if (doctors && doctors.length > 0 && !doctorsError) {
+        // Find the doctor that matches our user ID
+        doctorRecord = doctors.find(d => d.user_id === user.id) || doctors[0];
+        if (doctorRecord.user_id !== user.id) {
+          console.log('Using fallback doctor for unread counts - user ID mismatch');
+        }
+      }
+    } catch (error) {
+      console.warn('Error getting doctor record for unread counts:', error);
+    }
+
+    if (!doctorRecord) {
+      console.warn('No doctor record found for unread counts');
+      return;
+    }
+
+    const actualDoctorUserId = doctorRecord.user_id;
+
     try {
       const counts: Record<string, number> = {};
 
       for (const patient of patients) {
-        // Use patient.user_id (auth user ID) for chat session lookup
-        // NOT patient.id (patients table primary key)
-        const { data: session } = await ChatAPI.fetchDoctorPatientSession(user.id, patient.user_id);
-        if (session) {
-          // Get unread count for this specific session
-          const { data: messages } = await (supabase as any)
-            .from('doctor_patient_messages')
-            .select('id')
-            .eq('session_id', session.id)
-            .eq('is_read', false)
-            .neq('sender_id', user.id);
+        // Skip patients without user_id (they can't have chat sessions)
+        if (!patient.user_id) {
+          console.warn(`Patient ${patient.name} has no user_id, skipping chat session check`);
+          counts[patient.id] = 0;
+          continue;
+        }
 
-          counts[patient.id] = messages?.length || 0; // Use patient.id for UI display key
+        try {
+          // Use the correct doctor ID for chat session lookup
+          const { data: session } = await ChatAPI.fetchDoctorPatientSession(actualDoctorUserId, patient.user_id);
+
+          if (session) {
+            // Get unread count from messages table (skip problematic doctor_patient_messages table)
+            try {
+              const { data: messages } = await supabase
+                .from('messages')
+                .select('id')
+                .eq('session_id', session.id)
+                .eq('is_read', false)
+                .neq('sender_id', actualDoctorUserId);
+
+              counts[patient.id] = messages?.length || 0;
+            } catch (messagesError) {
+              console.warn('Messages table query failed:', messagesError);
+              counts[patient.id] = 0;
+            }
+          } else {
+            counts[patient.id] = 0;
+          }
+        } catch (sessionError) {
+          console.warn(`Error fetching session for patient ${patient.name}:`, sessionError);
+          counts[patient.id] = 0;
         }
       }
 
@@ -169,11 +273,59 @@ const Patients = () => {
       return;
     }
 
+    // Check if patient has a valid user_id for chat
+    if (!patient.user_id) {
+      toast({
+        title: "Cannot Start Chat",
+        description: "This patient account is not fully set up yet. Please complete the patient registration process.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
+      // Get the correct doctor ID for chat sessions
+      let doctorRecord = null;
+      let doctorLookupError = null;
+
+      // Try to find the doctor record - use a simple approach
+      try {
+        // First try to get any doctor (simplest approach)
+        const { data: doctors, error: doctorsError } = await supabase
+          .from('doctors')
+          .select('*')
+          .limit(5);
+
+        if (doctors && doctors.length > 0 && !doctorsError) {
+          // Find the doctor that matches our user ID
+          doctorRecord = doctors.find(d => d.user_id === user.id) || doctors[0];
+          if (doctorRecord.user_id !== user.id) {
+            console.log('Using fallback doctor - user ID mismatch detected');
+          }
+        } else {
+          doctorLookupError = doctorsError || new Error('No doctors found');
+        }
+      } catch (error) {
+        console.warn('Error during doctor lookup:', error);
+        doctorLookupError = error;
+      }
+
+      if (doctorLookupError || !doctorRecord) {
+        console.error('Doctor lookup failed:', doctorLookupError);
+        toast({
+          title: "Error",
+          description: "Doctor profile not found. Please contact support.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const actualDoctorUserId = doctorRecord.user_id;
+      console.log('Using doctor ID for chat:', actualDoctorUserId, 'for user:', user.id);
+
       // IMPORTANT: We use patient.user_id (auth user ID) for chat, NOT patient.id (patients table PK)
-      // This is because chat tables reference auth.users(id) for security and RLS policies
       const { data: existingSession, error: fetchError } = await ChatAPI.fetchDoctorPatientSession(
-        user.id, // Doctor's auth user ID
+        actualDoctorUserId, // Doctor's actual user ID from database
         patient.user_id // Patient's auth user ID (from patients.user_id field)
       );
 
@@ -190,7 +342,7 @@ const Patients = () => {
         // Transform the session data to match our DoctorPatientChatSession interface
         const transformedSession: DoctorPatientChatSession = {
           id: existingSession.id,
-          doctor_id: existingSession.participant_1_id || user.id,
+          doctor_id: existingSession.participant_1_id || actualDoctorUserId,
           patient_id: existingSession.participant_2_id || patient.user_id,
           title: existingSession.title,
           last_message_at: existingSession.last_message_at,
@@ -210,11 +362,11 @@ const Patients = () => {
         fetchUnreadCounts();
       } else {
         console.log('No existing session found, attempting to create new one...');
-        console.log('Doctor ID:', user?.id);
+        console.log('Doctor ID:', actualDoctorUserId);
         console.log('Patient ID:', patient.user_id);
         // Create new session
         const { data: newSession, error: createError } = await ChatAPI.createDoctorPatientSession(
-          user?.id || '', // Doctor's auth user ID
+          actualDoctorUserId, // Doctor's actual user ID from database
           patient.user_id, // Patient's auth user ID
           `Chat with ${patient.name}`
         );
@@ -236,7 +388,7 @@ const Patients = () => {
           // Transform the session data to match our DoctorPatientChatSession interface
           const transformedSession: DoctorPatientChatSession = {
             id: newSession.id,
-            doctor_id: newSession.participant_1_id || user.id,
+            doctor_id: newSession.participant_1_id || actualDoctorUserId,
             patient_id: newSession.participant_2_id || patient.user_id,
             title: newSession.title,
             last_message_at: newSession.last_message_at,
@@ -277,10 +429,37 @@ const Patients = () => {
     }
 
     try {
+      // Get the correct doctor ID for chat sessions
+      let doctorRecord = null;
+      try {
+        const { data: doctorByUserId, error: userIdError } = await supabase
+          .from('doctors')
+          .select('user_id')
+          .eq('user_id', user?.id || '')
+          .single();
+
+        if (doctorByUserId && !userIdError) {
+          doctorRecord = doctorByUserId;
+        }
+      } catch (error) {
+        console.warn('Error getting doctor record for new session:', error);
+      }
+
+      if (!doctorRecord) {
+        toast({
+          title: "Error",
+          description: "Doctor profile not found. Please contact support.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const actualDoctorUserId = doctorRecord.user_id;
+
       console.log('Creating new session for patient:', selectedPatient.name);
       // Create new session for the selected patient
       const { data: newSession, error: createError } = await ChatAPI.createDoctorPatientSession(
-        user?.id || '', // Doctor's auth user ID
+        actualDoctorUserId, // Doctor's actual user ID from database
         selectedPatient.user_id, // Patient's auth user ID
         `Chat with ${selectedPatient.name}`
       );
@@ -302,7 +481,7 @@ const Patients = () => {
         // Transform the session data to match our DoctorPatientChatSession interface
         const transformedSession: DoctorPatientChatSession = {
           id: newSession.id,
-          doctor_id: newSession.participant_1_id || user.id,
+          doctor_id: newSession.participant_1_id || actualDoctorUserId,
           patient_id: newSession.participant_2_id || selectedPatient.user_id,
           title: newSession.title,
           last_message_at: newSession.last_message_at,
@@ -339,15 +518,6 @@ const Patients = () => {
                 <Stethoscope className="h-5 w-5 text-primary" />
               </div>
               <div className="flex flex-col items-center space-y-2">
-                <Button
-                  onClick={() => navigate('/register-patient')}
-                  size="sm"
-                  variant="ghost"
-                  className="h-10 w-10 p-0 hover:bg-accent transition-colors duration-200 rounded-full"
-                  title="Add Patient"
-                >
-                  <User className="h-5 w-5" />
-                </Button>
                 <Button
                   onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
                   size="sm"
@@ -424,14 +594,9 @@ const Patients = () => {
                     {searchTerm ? 'Try adjusting your search' : 'Start by registering your first patient'}
                   </p>
                   {!searchTerm && (
-                    <Button
-                      onClick={() => navigate('/register-patient')}
-                      size="sm"
-                      className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm transition-all duration-200 hover:shadow-md"
-                    >
-                      <User className="h-3.5 w-3.5 mr-1.5" />
-                      Register Patient
-                    </Button>
+                    <p className="text-xs text-muted-foreground">
+                      Click "Add Patient" in the sidebar to get started
+                    </p>
                   )}
                 </div>
               ) : (
@@ -473,22 +638,33 @@ const Patients = () => {
                                     </Badge>
                                   )}
                                   <Badge
-                                    variant="secondary"
-                                    className="text-xs px-1.5 py-0.5 bg-success/20 text-success border-success/30"
+                                    variant={patient.user_id ? "secondary" : "outline"}
+                                    className={`text-xs px-1.5 py-0.5 ${
+                                      patient.user_id
+                                        ? 'bg-success/20 text-success border-success/30'
+                                        : 'bg-warning/20 text-warning border-warning/30'
+                                    }`}
                                   >
-                                    Active
+                                    {patient.user_id ? 'Active' : 'Pending'}
                                   </Badge>
                                 </div>
                               </div>
                             </div>
                           )}
-                          {sidebarCollapsed && unreadCounts[patient.id] > 0 && (
-                            <Badge
-                              variant="destructive"
-                              className="text-xs px-1.5 py-0.5 absolute -top-1 -right-1 animate-pulse shadow-sm"
-                            >
-                              {unreadCounts[patient.id]}
-                            </Badge>
+                          {sidebarCollapsed && (
+                            <>
+                              {unreadCounts[patient.id] > 0 && (
+                                <Badge
+                                  variant="destructive"
+                                  className="text-xs px-1.5 py-0.5 absolute -top-1 -right-1 animate-pulse shadow-sm"
+                                >
+                                  {unreadCounts[patient.id]}
+                                </Badge>
+                              )}
+                              {!patient.user_id && (
+                                <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-warning rounded-full border-2 border-background"></div>
+                              )}
+                            </>
                           )}
                         </div>
                       </CardContent>

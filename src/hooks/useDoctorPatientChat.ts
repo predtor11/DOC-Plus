@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { ChatAPI } from '@/integrations/supabase/chat-api';
 
 interface DoctorPatientMessage {
   id: string;
@@ -34,27 +35,38 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
     try {
       setLoading(true);
       console.log('Fetching doctor-patient sessions for user:', user.id);
+      console.log('Using database user_id for session lookup:', user.user_id || user.id);
 
-      const { data, error } = await (supabase as any)
-        .from('doctor_patient_chat_sessions')
+      // For now, just use the regular chat_sessions table (skip doctor_patient_chat_sessions)
+      console.log('Using chat_sessions table for doctor-patient sessions (skipping doctor_patient_chat_sessions)');
+      const { data, error } = await supabase
+        .from('chat_sessions')
         .select('*')
-        .or(`doctor_id.eq.${user.id},patient_id.eq.${user.id}`)
+        .eq('session_type', 'doctor-patient')
+        .or(`participant_1_id.eq.${user.user_id || user.id},participant_2_id.eq.${user.user_id || user.id}`)
         .order('last_message_at', { ascending: false, nullsFirst: false });
 
       if (error) {
-        console.error('Error fetching doctor-patient sessions:', error);
-        if (error.code === '42P01') {
-          console.warn('Doctor-patient chat tables do not exist yet');
-          setSessions([]);
-        } else {
-          throw error;
-        }
+        console.error('Error fetching sessions:', error);
+        setSessions([]);
       } else {
-        console.log('Doctor-patient sessions fetched successfully:', data?.length || 0, 'sessions');
-        setSessions(data || []);
+        console.log('Sessions fetched successfully:', data?.length || 0, 'sessions');
+
+        // Transform data to match our interface if needed
+        const transformedSessions = (data || []).map(session => ({
+          id: session.id,
+          doctor_id: session.participant_1_id, // For regular chat_sessions, use participant_1_id as doctor
+          patient_id: session.participant_2_id, // For regular chat_sessions, use participant_2_id as patient
+          title: session.title,
+          last_message_at: session.last_message_at,
+          created_at: session.created_at,
+          updated_at: session.updated_at
+        }));
+
+        setSessions(transformedSessions);
       }
     } catch (error) {
-      console.error('Error fetching doctor-patient sessions:', error);
+      console.error('Error fetching sessions:', error);
       setSessions([]);
     } finally {
       setLoading(false);
@@ -72,26 +84,34 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
       setLoading(true);
       console.log('Fetching doctor-patient messages for session:', sessionId);
 
-      const { data, error } = await (supabase as any)
-        .from('doctor_patient_messages')
+      // For now, just use the regular messages table (skip doctor_patient_messages)
+      console.log('Using messages table for doctor-patient messages (skipping doctor_patient_messages)');
+      const { data, error } = await supabase
+        .from('messages')
         .select('*')
         .eq('session_id', sessionId)
         .order('created_at', { ascending: true });
 
       if (error) {
-        console.error('Error fetching doctor-patient messages:', error);
-        if (error.code === '42P01') {
-          console.warn('Doctor-patient messages table does not exist yet');
-          setMessages([]);
-        } else {
-          throw error;
-        }
+        console.error('Error fetching messages:', error);
+        setMessages([]);
       } else {
-        console.log('Doctor-patient messages fetched successfully:', data?.length || 0, 'messages');
-        setMessages(data || []);
+        console.log('Messages fetched successfully:', data?.length || 0, 'messages');
+
+        // Transform data to match our interface if needed
+        const transformedMessages = (data || []).map(msg => ({
+          id: msg.id,
+          session_id: msg.session_id,
+          sender_id: msg.sender_id,
+          content: msg.content,
+          is_read: msg.is_read || false,
+          created_at: msg.created_at
+        }));
+
+        setMessages(transformedMessages);
       }
     } catch (error) {
-      console.error('Error fetching doctor-patient messages:', error);
+      console.error('Error fetching messages:', error);
       setMessages([]);
     } finally {
       setLoading(false);
@@ -104,51 +124,31 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
 
     try {
       setLoading(true);
-      console.log('Creating doctor-patient session:', { doctorId, patientId, title });
+      console.log('Creating doctor-patient session via ChatAPI:', { doctorId, patientId, title });
 
-      const sessionData = {
-        doctor_id: doctorId,
-        patient_id: patientId,
-        title: title || 'Doctor-Patient Chat',
-      };
-
-      const { data, error } = await (supabase as any)
-        .from('doctor_patient_chat_sessions')
-        .insert(sessionData)
-        .select()
-        .single();
+      // Use ChatAPI which handles everything properly
+      const { data, error } = await ChatAPI.createDoctorPatientSession(doctorId, patientId, title);
 
       if (error) {
-        console.error('Error creating doctor-patient session:', error);
-        
-        // If session already exists (unique constraint violation), try to find it
-        if (error.code === '23505') { // unique_violation
-          console.log('Session already exists, trying to find it...');
-          const { data: existingData, error: fetchError } = await (supabase as any)
-            .from('doctor_patient_chat_sessions')
-            .select('*')
-            .eq('doctor_id', doctorId)
-            .eq('patient_id', patientId)
-            .single();
-            
-          if (fetchError) {
-            console.error('Error fetching existing session:', fetchError);
-            throw fetchError;
-          }
-          
-          console.log('Found existing session:', existingData);
-          return existingData;
-        }
-        
-        if (error.code === '42P01') {
-          throw new Error('Doctor-patient chat functionality is not available yet. Please contact support.');
-        }
+        console.error('Error creating doctor-patient session via ChatAPI:', error);
         throw error;
       }
 
-      console.log('Doctor-patient session created successfully:', data);
+      console.log('Doctor-patient session created successfully via ChatAPI:', data);
+
+      // Transform the data to match our interface if needed
+      const transformedSession = {
+        id: data.id,
+        doctor_id: data.participant_1_id || doctorId,
+        patient_id: data.participant_2_id || patientId,
+        title: data.title,
+        last_message_at: data.last_message_at,
+        created_at: data.created_at,
+        updated_at: data.updated_at
+      };
+
       await fetchSessions(); // Refresh sessions list
-      return data;
+      return transformedSession;
     } catch (error) {
       console.error('Error creating doctor-patient session:', error);
       throw error;
@@ -166,31 +166,30 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
 
     try {
       setLoading(true);
-      console.log('Sending doctor-patient message:', { sessionId, content, senderId: user.id });
+      console.log('Sending doctor-patient message via ChatAPI:', { sessionId, content, senderId: user.id });
 
-      const messageData = {
-        session_id: sessionId,
-        sender_id: user.id,
-        content: content.trim(),
-      };
-
-      const { data, error } = await (supabase as any)
-        .from('doctor_patient_messages')
-        .insert(messageData)
-        .select()
-        .single();
+      // Use ChatAPI which has proper fallback logic
+      const { data, error } = await ChatAPI.sendMessage(sessionId, content, user.id);
 
       if (error) {
-        console.error('Error sending doctor-patient message:', error);
-        if (error.code === '42P01') {
-          throw new Error('Doctor-patient chat functionality is not available yet. Please contact support.');
-        }
+        console.error('Error sending doctor-patient message via ChatAPI:', error);
         throw error;
       }
 
-      console.log('Doctor-patient message sent successfully:', data);
-      setMessages(prev => [...prev, data]); // Add to local state
-      return data;
+      console.log('Doctor-patient message sent successfully via ChatAPI:', data);
+
+      // Transform the data to match our interface if needed
+      const transformedMessage = {
+        id: data.id,
+        session_id: data.session_id,
+        sender_id: data.sender_id,
+        content: data.content,
+        is_read: data.is_read || false,
+        created_at: data.created_at
+      };
+
+      setMessages(prev => [...prev, transformedMessage]); // Add to local state
+      return transformedMessage;
     } catch (error) {
       console.error('Error sending doctor-patient message:', error);
       throw error;
@@ -206,20 +205,20 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
     try {
       console.log('Marking doctor-patient messages as read:', { sessionId, userId: user.id });
 
-      const { error } = await (supabase as any)
-        .from('doctor_patient_messages')
+      // For now, just use the regular messages table (skip doctor_patient_messages)
+      console.log('Using messages table for marking doctor-patient messages as read');
+      const { error } = await supabase
+        .from('messages')
         .update({ is_read: true })
         .eq('session_id', sessionId)
         .neq('sender_id', user.id)
         .eq('is_read', false);
 
       if (error) {
-        console.error('Error marking doctor-patient messages as read:', error);
-        if (error.code !== '42P01') {
-          throw error;
-        }
+        console.error('Error marking messages as read:', error);
+        throw error;
       } else {
-        console.log('Doctor-patient messages marked as read successfully');
+        console.log('Messages marked as read successfully');
         // Update local state
         setMessages(prev =>
           prev.map(msg =>
@@ -230,7 +229,7 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
         );
       }
     } catch (error) {
-      console.error('Error marking doctor-patient messages as read:', error);
+      console.error('Error marking messages as read:', error);
       throw error;
     }
   };

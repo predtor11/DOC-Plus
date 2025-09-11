@@ -42,8 +42,8 @@ export interface OpenRouterError {
 }
 
 export class OpenRouterService {
-  private static readonly BASE_URL = '/api/openrouter';
-  private static readonly MODEL = import.meta.env.VITE_OPENROUTER_MODEL || 'openai/gpt-oss-20b:free';
+  private static readonly BASE_URL = 'https://openrouter.ai/api/v1';
+  private static readonly MODEL = import.meta.env.VITE_OPENROUTER_MODEL || 'openai/gpt-3.5-turbo';
   private static readonly API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY;
 
   /**

@@ -131,6 +131,7 @@ export type Database = {
           medical_history: string | null
           name: string
           phone: string | null
+          temp_password: string | null
           updated_at: string
           user_id: string | null
         }
@@ -149,6 +150,7 @@ export type Database = {
           medical_history?: string | null
           name: string
           phone?: string | null
+          temp_password?: string | null
           updated_at?: string
           user_id?: string | null
         }
@@ -167,6 +169,7 @@ export type Database = {
           medical_history?: string | null
           name?: string
           phone?: string | null
+          temp_password?: string | null
           updated_at?: string
           user_id?: string | null
         }

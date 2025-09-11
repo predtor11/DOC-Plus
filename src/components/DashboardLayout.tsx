@@ -12,11 +12,15 @@ interface DashboardLayoutProps {
 
 const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
   const { user } = useAuth();
-  
+
+  console.log('📊 DashboardLayout - Rendering for user:', user);
+  console.log('📊 DashboardLayout - User role:', user?.role);
+  console.log('📊 DashboardLayout - User registration_no:', user?.registration_no);
+
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-background">
-        {user?.registration_no ? <DoctorSidebar /> : <PatientSidebar />}
+        {user?.role === 'doctor' ? <DoctorSidebar /> : <PatientSidebar />}
         <main className="flex-1 flex flex-col">
           <header className="h-16 border-b bg-card flex items-center px-6 shadow-sm">
             <SidebarTrigger className="lg:hidden" />
@@ -33,6 +37,12 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
             </div>
           </header>
           <div className="flex-1 p-6 overflow-auto">
+            <div className="border-2 border-red-500 p-4 mb-4">
+              <h2 className="text-lg font-bold text-red-600">DEBUG: Dashboard Content</h2>
+              <p>User: {user?.name}</p>
+              <p>Role: {user?.role}</p>
+              <p>Registration No: {user?.registration_no || 'None'}</p>
+            </div>
             {children}
           </div>
         </main>

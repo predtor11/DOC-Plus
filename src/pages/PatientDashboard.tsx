@@ -50,6 +50,15 @@ const PatientDashboard = () => {
           // Patient record doesn't exist - create it automatically
           console.log('Creating patient record for user:', user.id);
 
+          // First, try to find an available doctor to assign
+          const { data: availableDoctor, error: findDoctorError } = await supabase
+            .from('doctors')
+            .select('user_id')
+            .limit(1)
+            .single();
+
+          const doctorId = availableDoctor?.user_id || null;
+
           const { data: newPatient, error: createError } = await supabase
             .from('patients')
             .insert({
@@ -65,7 +74,7 @@ const PatientDashboard = () => {
               medical_history: '',
               allergies: '',
               current_medications: '',
-              assigned_doctor_id: null
+              assigned_doctor_id: doctorId // Use available doctor or null if none found
             })
             .select('assigned_doctor_id')
             .single();
@@ -84,17 +93,18 @@ const PatientDashboard = () => {
             return;
           }
 
-          // Get doctor details for the newly created patient
-          const { data: doctorData, error: doctorError } = await supabase
+          // Get doctor details for the newly created patient - use safe bulk query approach
+          const { data: doctors } = await supabase
             .from('doctors')
-            .select('id, name, registration_no')
-            .eq('user_id', newPatient.assigned_doctor_id)
-            .single();
+            .select('id, name, registration_no, user_id')
+            .limit(10);
 
-          if (doctorError) {
-            console.error('Error fetching doctor data for new patient:', doctorError);
+          const doctorData = doctors?.find(d => d.user_id === newPatient.assigned_doctor_id);
+
+          if (!doctorData) {
+            console.error('Doctor not found for new patient');
             // Don't show error to user, just continue without doctor info
-          } else if (doctorData) {
+          } else {
             setDoctorInfo(doctorData);
           }
           setLoading(false);
@@ -105,17 +115,18 @@ const PatientDashboard = () => {
       }
 
       if (patientData?.assigned_doctor_id) {
-        // Get doctor details
-        const { data: doctorData, error: doctorError } = await supabase
+        // Get doctor details - use safe bulk query approach
+        const { data: doctors } = await supabase
           .from('doctors')
-          .select('id, name, registration_no')
-          .eq('user_id', patientData.assigned_doctor_id)
-          .single();
+          .select('id, name, registration_no, user_id')
+          .limit(10);
 
-        if (doctorError) {
-          console.error('Error fetching doctor data:', doctorError);
+        const doctorData = doctors?.find(d => d.user_id === patientData.assigned_doctor_id);
+
+        if (!doctorData) {
+          console.error('Doctor not found for patient');
           // Don't show error to user, just continue without doctor info
-        } else if (doctorData) {
+        } else {
           setDoctorInfo(doctorData);
         }
       }

@@ -32,7 +32,7 @@ const DoctorProfile = () => {
           name: profileData.name,
           username: profileData.username,
         })
-        .eq('user_id', user.user_id);
+        .eq('user_id', user.id); // Use Clerk user ID to match doctors.user_id column
 
       if (error) throw error;
 

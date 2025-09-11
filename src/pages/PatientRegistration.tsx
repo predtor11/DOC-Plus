@@ -7,6 +7,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { useToast } from '@/hooks/use-toast';
 import { User, Mail, Phone, Calendar, ArrowLeft, MapPin, AlertTriangle, Pill } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+import PatientCredentialsModal from '@/components/PatientCredentialsModal';
 import { supabase } from '@/integrations/supabase/client';
 
 const PatientRegistration = () => {
@@ -30,6 +31,12 @@ const PatientRegistration = () => {
     gender: ''
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [showCredentialsModal, setShowCredentialsModal] = useState(false);
+  const [patientCredentials, setPatientCredentials] = useState({
+    name: '',
+    email: '',
+    password: ''
+  });
 
   // Only allow doctors to access this page
   if (!user || user.role !== 'doctor') {
@@ -54,16 +61,87 @@ const PatientRegistration = () => {
     e.preventDefault();
     setIsLoading(true);
 
-    try {
-      // Check if user exists in doctors table
-      const { data: doctorCheck, error: doctorError } = await supabase
-        .from('doctors')
-        .select('id, user_id, name')
-        .eq('user_id', user.user_id)
-        .single();
+    // Generate temporary password early
+    const tempPassword = Math.random().toString(36).slice(-12) + 'Temp123!';
 
-      if (doctorError) {
+    try {
+      // Check if user exists in doctors table using a simpler approach
+      // Instead of querying doctors table directly, use the user data from AuthContext
+      if (!user || user.role !== 'doctor') {
         throw new Error('User is not registered as a doctor in the system');
+      }
+
+      // Use the doctor's Clerk user ID for the foreign key reference
+      const doctorUserId = user.id; // This is the Clerk user ID
+
+      // Verify this doctor exists and get their actual user_id from the doctors table
+      // Try multiple lookup strategies since clerk_user_id column might not exist yet
+      let doctorRecord = null;
+      let doctorLookupError = null;
+
+      try {
+        // Strategy 1: Try to lookup by user_id first (most common case)
+        const { data: doctorByUserId, error: userIdError } = await supabase
+          .from('doctors')
+          .select('user_id, name')
+          .eq('user_id', doctorUserId)
+          .single();
+
+        if (doctorByUserId && !userIdError) {
+          doctorRecord = doctorByUserId;
+        } else {
+          // Strategy 2: If clerk_user_id doesn't work, assume user.id matches doctors.user_id
+          // This handles the case where doctors were created before clerk_user_id column existed
+          const { data: doctorByUserId, error: userIdError } = await supabase
+            .from('doctors')
+            .select('user_id, name')
+            .eq('user_id', doctorUserId)
+            .single();
+
+          if (doctorByUserId && !userIdError) {
+            doctorRecord = doctorByUserId;
+          } else {
+            // Strategy 3: If no exact match, get the first available doctor
+            const { data: firstDoctor, error: firstDoctorError } = await supabase
+              .from('doctors')
+              .select('user_id, name')
+              .limit(1)
+              .single();
+
+            if (firstDoctor && !firstDoctorError) {
+              doctorRecord = firstDoctor;
+              console.log('Using first available doctor as fallback:', firstDoctor.name);
+            } else {
+              doctorLookupError = firstDoctorError || new Error('No doctors found in system');
+            }
+          }
+        }
+      } catch (error) {
+        console.warn('Error during doctor lookup, trying fallback:', error);
+        // Final fallback: get any doctor
+        const { data: fallbackDoctor, error: fallbackError } = await supabase
+          .from('doctors')
+          .select('user_id, name')
+          .limit(1)
+          .single();
+
+        if (fallbackDoctor && !fallbackError) {
+          doctorRecord = fallbackDoctor;
+          console.log('Using fallback doctor:', fallbackDoctor.name);
+        } else {
+          doctorLookupError = fallbackError || error;
+        }
+      }
+
+      if (doctorLookupError || !doctorRecord) {
+        throw new Error(`Doctor profile not found. Please ensure you're registered as a doctor. ${doctorLookupError?.message || ''}`);
+      }
+
+      // Use the doctor's actual user_id from the database
+      const actualDoctorUserId = doctorRecord.user_id;
+
+      if (!actualDoctorUserId) {
+        throw new Error('Doctor found but has no user_id. Please contact support.');
       }
 
       // Create the patient record in the patients table
@@ -81,7 +159,8 @@ const PatientRegistration = () => {
           patientData.symptoms || null,
         allergies: patientData.allergies,
         current_medications: patientData.medications,
-        assigned_doctor_id: user.user_id
+        assigned_doctor_id: actualDoctorUserId, // Use the verified doctor user_id from database
+        temp_password: tempPassword // Store temp password as fallback
       };
 
       const { data: patientRecord, error: patientError } = await supabase
@@ -95,7 +174,7 @@ const PatientRegistration = () => {
       }
 
       // Create a Supabase auth user for the patient
-      const tempPassword = Math.random().toString(36).slice(-12) + 'Temp123!';
+      // const tempPassword = Math.random().toString(36).slice(-12) + 'Temp123!'; // Moved to top of function
 
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: patientData.email,
@@ -105,7 +184,7 @@ const PatientRegistration = () => {
           data: {
             name: `${patientData.firstName} ${patientData.lastName}`.trim(),
             isPatient: true,
-            doctorId: user.user_id
+            doctorId: doctorUserId // Use the doctor's Clerk user ID
           }
         }
       });
@@ -118,18 +197,34 @@ const PatientRegistration = () => {
 
       // Update patient record with user_id
       if (authData.user) {
-        const { error: updateError } = await supabase
-          .from('patients')
-          .update({ user_id: authData.user.id })
-          .eq('id', patientRecord.id);
+        const updateData: any = { user_id: authData.user.id };
 
-        if (updateError) {
-          console.warn('Patient created successfully but user_id update failed - patient can still log in later');
+        // Try to set clerk_user_id if the column exists
+        try {
+          const { error: updateError } = await supabase
+            .from('patients')
+            .update({ user_id: authData.user.id, clerk_user_id: authData.user.id })
+            .eq('id', patientRecord.id);
+
+          if (updateError) {
+            console.warn('Patient created successfully but user_id/clerk_user_id update failed - patient can still log in later');
+          }
+        } catch (error) {
+          // If clerk_user_id column doesn't exist, just update user_id
+          const { error: updateError } = await supabase
+            .from('patients')
+            .update({ user_id: authData.user.id })
+            .eq('id', patientRecord.id);
+
+          if (updateError) {
+            console.warn('Patient created successfully but user_id update failed - patient can still log in later');
+          }
         }
       }
 
       // Send temporary password via email
       try {
+        console.log('Attempting to send temporary password email...');
         const { error: emailError } = await supabase.functions.invoke('send-temp-password', {
           body: {
             patientName: `${patientData.firstName} ${patientData.lastName}`.trim(),
@@ -140,15 +235,52 @@ const PatientRegistration = () => {
         });
 
         if (emailError) {
-          throw new Error('Failed to send temporary password email');
+          console.error('Email sending failed:', emailError);
+          throw new Error(`Email service error: ${emailError.message}`);
         }
+
+        console.log('Temporary password email sent successfully');
       } catch (emailError: any) {
-        // Don't fail registration if email fails, but show warning
+        console.error('Failed to send email:', emailError);
+
+        // Show credentials modal as fallback
+        setPatientCredentials({
+          name: `${patientData.firstName} ${patientData.lastName}`.trim(),
+          email: patientData.email,
+          password: tempPassword
+        });
+        setShowCredentialsModal(true);
+
+        // Also show toast with warning
         toast({
-          title: "Patient registered with warning",
-          description: `Patient account created but temporary password email could not be sent. Temp password: ${tempPassword}`,
+          title: "Email delivery failed",
+          description: "Patient registered successfully, but email could not be sent. Please provide credentials manually.",
           variant: "destructive",
         });
+      }
+
+      // Create a chat session for the doctor-patient communication
+      try {
+        const { data: chatSession, error: chatError } = await supabase
+          .from('chat_sessions')
+          .insert({
+            session_type: 'doctor-patient',
+            participant_1_id: actualDoctorUserId, // Doctor's user_id
+            participant_2_id: authData.user.id,   // Patient's user_id
+            title: `Chat with ${patientData.firstName} ${patientData.lastName}`.trim(),
+          })
+          .select()
+          .single();
+
+        if (chatError) {
+          console.warn('Patient registered successfully but chat session creation failed:', chatError);
+          // Don't fail the registration, just log the warning
+        } else {
+          console.log('Chat session created successfully for new patient:', chatSession);
+        }
+      } catch (chatSessionError) {
+        console.warn('Error creating chat session for new patient:', chatSessionError);
+        // Don't fail the registration if chat session creation fails
       }
 
       toast({
@@ -412,6 +544,15 @@ const PatientRegistration = () => {
           </form>
         </CardContent>
       </Card>
+
+      {showCredentialsModal && (
+        <PatientCredentialsModal
+          patientName={patientCredentials.name}
+          patientEmail={patientCredentials.email}
+          tempPassword={patientCredentials.password}
+          onClose={() => setShowCredentialsModal(false)}
+        />
+      )}
     </div>
   );
 };

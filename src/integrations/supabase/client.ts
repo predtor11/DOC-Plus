@@ -19,46 +19,11 @@ console.log('Supabase Configuration:', {
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-// Create a custom fetch function that includes the user's token
-const customFetch = async (url: RequestInfo | URL, init?: RequestInit) => {
-  // Get session directly from localStorage to avoid circular dependency
-  const sessionData = localStorage.getItem('sb-' + SUPABASE_URL.split('//')[1].split('.')[0] + '-auth-token');
-  let session = null;
-  
-  if (sessionData) {
-    try {
-      const parsed = JSON.parse(sessionData);
-      session = parsed;
-    } catch (e) {
-      console.error('Error parsing session data:', e);
-    }
-  }
-  
-  const headers = new Headers(init?.headers);
-  headers.set('apikey', SUPABASE_PUBLISHABLE_KEY);
-  
-  if (session?.access_token) {
-    headers.set('Authorization', `Bearer ${session.access_token}`);
-    console.log('Using user access token for authenticated request');
-  } else {
-    headers.set('Authorization', `Bearer ${SUPABASE_PUBLISHABLE_KEY}`);
-    console.log('Using API key for anonymous request');
-  }
-  
-  return fetch(url, {
-    ...init,
-    headers,
-  });
-};
-
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
     storage: localStorage,
     persistSession: true,
     autoRefreshToken: true,
-  },
-  global: {
-    fetch: customFetch,
   },
   db: {
     schema: 'public',
