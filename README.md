@@ -1,4 +1,5 @@
 <div align="center">
+	<img src="public/favicon.ico" alt="Doc+ Logo" width="80" height="80" style="border-radius: 10px;">
 	<h1>Doc+ (Doc Plus)</h1>
 	<p><strong>AI‑assisted medical collaboration platform for doctors and patients.</strong></p>
 	<p>Secure onboarding • Patient management • Doctor ↔ Patient chat • AI clinical assistant • Email invitations</p>
@@ -198,6 +199,7 @@ From `package.json`:
 3. Commit changes: `git commit -m "feat: add xyz"`
 4. Open PR with context & screenshots
 
+<<<<<<< HEAD
 ## 👥 Contact our Team
 
 | Name                            | LinkedIn                                                 |
@@ -207,6 +209,9 @@ From `package.json`:
 | Jayesh Dubey                    | https://www.linkedin.com/in/jayesh-dubey823/             |
 | Vijay Vinod Mane                | https://www.linkedin.com/in/vijay-vinod-mane/            |
 | Kshatriya Nandini Kuldeep Singh | https://www.linkedin.com/in/kshatriya-nandini-331a16244/ |
+=======
+## 👥 Connet with our team
+>>>>>>> 46d832e (feat: add Doc+ logo to README header)
 
 
 
