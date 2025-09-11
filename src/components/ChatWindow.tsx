@@ -228,10 +228,19 @@ Address: ${patient.address || 'Not provided'}`;
   const getMessageIcon = (message: Message) => {
     if (message.is_ai_message) {
       return <Bot className="h-4 w-4" />;
-    } else if (message.sender_id === (user?.auth_user_id || user?.id)) {
-      return <User className="h-4 w-4" />;
+    }
+    
+    const isDoctorPatientChat = session?.session_type === 'doctor-patient';
+    const isCurrentUserMessage = message.sender_id === (user?.auth_user_id || user?.id);
+    
+    if (isDoctorPatientChat) {
+      if (user?.role === 'doctor') {
+        return isCurrentUserMessage ? <User className="h-4 w-4" /> : <Stethoscope className="h-4 w-4" />;
+      } else {
+        return isCurrentUserMessage ? <User className="h-4 w-4" /> : <Stethoscope className="h-4 w-4" />;
+      }
     } else {
-      return <Stethoscope className="h-4 w-4" />;
+      return isCurrentUserMessage ? <User className="h-4 w-4" /> : <Stethoscope className="h-4 w-4" />;
     }
   };
 
@@ -243,10 +252,21 @@ Address: ${patient.address || 'Not provided'}`;
   const getSenderName = (message: Message) => {
     if (message.is_ai_message) {
       return session?.session_type === 'ai-doctor' ? 'AI Assistant' : 'AI Support';
-    } else if (message.sender_id === (user?.auth_user_id || user?.id)) {
-      return 'You';
+    } 
+    
+    const isDoctorPatientChat = session?.session_type === 'doctor-patient';
+    const isCurrentUserMessage = message.sender_id === (user?.auth_user_id || user?.id);
+    
+    if (isDoctorPatientChat) {
+      // For doctor-patient chat
+      if (user?.role === 'doctor') {
+        return isCurrentUserMessage ? 'You' : 'Patient';
+      } else {
+        return isCurrentUserMessage ? 'You' : 'Doctor';
+      }
     } else {
-      return user?.role === 'doctor' ? 'Patient' : 'Doctor';
+      // For AI chats
+      return isCurrentUserMessage ? 'You' : (user?.role === 'doctor' ? 'Patient' : 'Doctor');
     }
   };
 
@@ -333,7 +353,16 @@ Address: ${patient.address || 'Not provided'}`;
           )}
           
           {messages.map((message) => {
-            const isUserMessage = message.sender_id === (user?.auth_user_id || user?.id) && !message.is_ai_message;
+            const isCurrentUserMessage = message.sender_id === (user?.auth_user_id || user?.id) && !message.is_ai_message;
+            const isDoctorPatientChat = session?.session_type === 'doctor-patient';
+            
+            // For doctor-patient chat, doctor's messages should appear on right as "You"
+            // For patients, doctor's messages appear on left as "Doctor"
+            // For doctors, patient's messages appear on left as "Patient"
+            const isUserMessage = isDoctorPatientChat 
+              ? (user?.role === 'doctor' ? isCurrentUserMessage : false)
+              : isCurrentUserMessage;
+            
             const isAIMessage = message.is_ai_message;
             
             return (
