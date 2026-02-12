@@ -93,11 +93,14 @@ const PatientRegistration = () => {
         } else {
           // Strategy 2: Try clerk_user_id if it exists
           console.log('Trying clerk_user_id lookup...');
-          const { data: doctorByClerkId, error: clerkIdError } = await supabase
+          const clerkResult: any = await (supabase as any)
             .from('doctors')
             .select('user_id, name')
             .eq('clerk_user_id', doctorUserId)
-            .single();
+            .maybeSingle();
+          
+          const doctorByClerkId = clerkResult.data;
+          const clerkIdError = clerkResult.error;
 
           console.log('Clerk ID lookup result:', { doctorByClerkId, clerkIdError });
 
@@ -106,11 +109,14 @@ const PatientRegistration = () => {
           } else {
             // Strategy 3: If no exact match, get the first available doctor
             console.log('Getting first available doctor...');
-            const { data: firstDoctor, error: firstDoctorError } = await supabase
+            const firstResult: any = await (supabase as any)
               .from('doctors')
               .select('user_id, name')
               .limit(1)
-              .single();
+              .maybeSingle();
+            
+            const firstDoctor = firstResult.data;
+            const firstDoctorError = firstResult.error;
 
             console.log('First doctor lookup result:', { firstDoctor, firstDoctorError });
 
@@ -177,44 +183,7 @@ const PatientRegistration = () => {
         throw patientError;
       }
 
-<<<<<<< HEAD
-      // Create a Clerk invitation for the patient
-      const { data: inviteData, error: inviteError } = await supabase.functions.invoke('invite-patient', {
-        body: {
-          patientEmail: patientData.email,
-          patientName: `${patientData.firstName} ${patientData.lastName}`.trim(),
-          doctorName: user.name,
-          doctorId: user.id
-        }
-      });
-
-      if (inviteError) {
-        // If invitation fails, delete the patient record
-        await supabase.from('patients').delete().eq('id', patientRecord.id);
-        throw inviteError;
-      }
-
-      // Update patient record with invitation data
-      const updateData: any = { invitation_id: inviteData.invitation_id };
-
-      // Try to set invitation_id
-      try {
-        const { error: updateError } = await supabase
-          .from('patients')
-          .update({ invitation_id: inviteData.invitation_id })
-          .eq('id', patientRecord.id);
-
-        if (updateError) {
-          console.warn('Patient created successfully but invitation_id update failed');
-        }
-      } catch (error) {
-        console.warn('Patient created successfully but invitation_id update failed');
-      }
-
-      // Clerk invitation email is sent automatically by Clerk's system
-      // No need for separate email since Clerk handles the invitation process
-=======
-      // Send invitation email with doctor's user_id
+// Send invitation email with doctor's user_id
       try {
         console.log('Attempting to send invitation email via Edge Function...');
         console.log('Doctor user ID:', actualDoctorUserId);
@@ -293,7 +262,13 @@ const PatientRegistration = () => {
           })
           .select()
           .single();
->>>>>>> 0616dda15e7755a245f8c9f2e6369a1c9fd79371
+
+        if (chatError) {
+          console.warn('Failed to create chat session:', chatError);
+        }
+      } catch (chatSessionError) {
+        console.warn('Error creating chat session:', chatSessionError);
+      }
 
       // Chat session will be created when patient accepts invitation and signs in
       // For now, just mark the patient as registered with invitation pending

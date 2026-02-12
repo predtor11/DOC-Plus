@@ -213,17 +213,11 @@ const AppRoutes = () => {
           <Route
             path="/dashboard"
             element={
-<<<<<<< HEAD
-              <DashboardLayout>
-                {user.role === 'doctor' ? <DoctorDashboard /> : <AIChat />}
-              </DashboardLayout>
-=======
               user.role === 'doctor' ? (
                 <Navigate to="/ai-chat" replace />
               ) : (
                 <Navigate to="/ai-chat" replace />
               )
->>>>>>> 0616dda15e7755a245f8c9f2e6369a1c9fd79371
             }
           />
           <Route

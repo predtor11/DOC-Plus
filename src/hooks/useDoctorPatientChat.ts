@@ -75,11 +75,7 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
         .from(CHAT_SESSIONS_TABLE)
         .select('*')
         .eq('session_type', 'doctor-patient')
-<<<<<<< HEAD
         .or(`participant_1_id.eq.${user.auth_user_id || user.id},participant_2_id.eq.${user.auth_user_id || user.id}`)
-=======
-        .or(`participant_1_id.eq.${user.id},participant_2_id.eq.${user.id}`)
->>>>>>> 0616dda15e7755a245f8c9f2e6369a1c9fd79371
         .order('last_message_at', { ascending: false, nullsFirst: false });
 
       if (error) {
@@ -226,26 +222,10 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
         throw new Error('Failed to send message - no data returned');
       }
 
-<<<<<<< HEAD
-      // Transform the data to match our interface if needed
-      const transformedMessage = {
-        id: data.id,
-        session_id: data.session_id,
-        sender_id: data.sender_id,
-        content: data.content,
-        is_read: data.is_read || false,
-        created_at: data.created_at
-      };
-
+      console.log('Message sent successfully:', data.id);
       // Don't add to local state immediately - let real-time subscription handle it
       // This prevents duplicate messages and ensures real-time delivery works properly
-      // setMessages(prev => [...prev, transformedMessage]);
-      return transformedMessage;
-=======
-      console.log('Message sent successfully:', data.id);
-      // The realtime subscription will handle adding the message to the state
       return data;
->>>>>>> 0616dda15e7755a245f8c9f2e6369a1c9fd79371
     } catch (error) {
       console.error('Error sending message:', error);
       throw error;
@@ -299,67 +279,6 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
     }
   }, [sessionId, user?.id, fetchMessages]);
 
-  // Realtime subscription
-  useEffect(() => {
-    if (!sessionId || !user?.id) {
-      console.log('Missing sessionId or user, skipping realtime subscription');
-      return;
-    }
-
-    const channelName = `doctor-patient-chat-${sessionId}-${Date.now()}`;
-    console.log('Setting up realtime subscription:', channelName);
-
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: MESSAGES_TABLE,
-          filter: `session_id=eq.${sessionId}`
-        },
-        (payload) => {
-          console.log('🎉 Realtime message received:', payload);
-
-          const newMessage = payload.new as DoctorPatientMessage;
-
-          if (!newMessage || !newMessage.id) {
-            console.warn('Invalid payload received:', payload);
-            return;
-          }
-
-          setMessages(prev => {
-            // Check for duplicates
-            if (prev.some(msg => msg.id === newMessage.id)) {
-              console.log('Message already exists, skipping:', newMessage.id);
-              return prev;
-            }
-            console.log('✅ Adding new message to state:', newMessage.id);
-            return [...prev, newMessage];
-          });
-        }
-      )
-      .subscribe((status, err) => {
-        console.log(`Realtime subscription status for ${channelName}:`, status);
-
-        if (err) {
-          console.error('Realtime subscription error details:', err);
-          return;
-        }
-
-        if (status === 'SUBSCRIBED') {
-          console.log('✅ Successfully subscribed to realtime updates for session:', sessionId);
-        }
-      });
-
-    // Cleanup function to unsubscribe when component unmounts or sessionId changes
-    return () => {
-      console.log('🧹 Cleaning up realtime subscription for session:', sessionId);
-      supabase.removeChannel(channel);
-    };
-  }, [sessionId, user?.id]);
-
   // Real-time subscription for messages
   useEffect(() => {
     if (!sessionId) {
@@ -387,6 +306,7 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
             sender_id: payload.new.sender_id,
             content: payload.new.content,
             is_read: payload.new.is_read || false,
+            is_ai_message: payload.new.is_ai_message || false,
             created_at: payload.new.created_at
           };
 
@@ -399,7 +319,7 @@ export const useDoctorPatientChat = (sessionId: string | null) => {
               return prev;
             }
             console.log('Real-time: Adding new message to messages array');
-            return [...prev, newMessage];
+            return [...prev, newMessage] as DoctorPatientMessage[];
           });
         }
       )
