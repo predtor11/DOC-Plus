@@ -99,3 +99,4 @@ secrets.json
 # Backup files
 *.bak
 *.backup
+.env*.local
