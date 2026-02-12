@@ -64,7 +64,7 @@ const OnboardingPage: React.FC = () => {
         registration_no: doctorProfile.registration_no,
       });
 
-      navigate('/dashboard');
+      navigate('/ai-chat');
     } catch (error) {
       console.error('Error creating doctor profile:', error);
       alert('Failed to create doctor profile. Please try again.');

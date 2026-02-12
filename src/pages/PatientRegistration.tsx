@@ -48,8 +48,8 @@ const PatientRegistration = () => {
             <p className="text-muted-foreground mb-4">
               Only doctors can register patients.
             </p>
-            <Link to="/dashboard">
-              <Button>Go to Dashboard</Button>
+            <Link to="/ai-chat">
+              <Button>Go to AI Assistant</Button>
             </Link>
           </CardContent>
         </Card>
@@ -77,6 +77,8 @@ const PatientRegistration = () => {
       let doctorLookupError = null;
 
       try {
+        console.log('Looking up doctor with user_id:', doctorUserId);
+
         // Strategy 1: Try to lookup by user_id first (most common case)
         const { data: doctorByUserId, error: userIdError } = await supabase
           .from('doctors')
@@ -84,26 +86,33 @@ const PatientRegistration = () => {
           .eq('user_id', doctorUserId)
           .single();
 
+        console.log('Doctor lookup result:', { doctorByUserId, userIdError });
+
         if (doctorByUserId && !userIdError) {
           doctorRecord = doctorByUserId;
         } else {
-          // Strategy 2: If clerk_user_id doesn't work, assume user.id matches doctors.user_id
-          // This handles the case where doctors were created before clerk_user_id column existed
-          const { data: doctorByUserId, error: userIdError } = await supabase
+          // Strategy 2: Try clerk_user_id if it exists
+          console.log('Trying clerk_user_id lookup...');
+          const { data: doctorByClerkId, error: clerkIdError } = await supabase
             .from('doctors')
             .select('user_id, name')
-            .eq('user_id', doctorUserId)
+            .eq('clerk_user_id', doctorUserId)
             .single();
 
-          if (doctorByUserId && !userIdError) {
-            doctorRecord = doctorByUserId;
+          console.log('Clerk ID lookup result:', { doctorByClerkId, clerkIdError });
+
+          if (doctorByClerkId && !clerkIdError) {
+            doctorRecord = doctorByClerkId;
           } else {
             // Strategy 3: If no exact match, get the first available doctor
+            console.log('Getting first available doctor...');
             const { data: firstDoctor, error: firstDoctorError } = await supabase
               .from('doctors')
               .select('user_id, name')
               .limit(1)
               .single();
+
+            console.log('First doctor lookup result:', { firstDoctor, firstDoctorError });
 
             if (firstDoctor && !firstDoctorError) {
               doctorRecord = firstDoctor;
@@ -155,7 +164,7 @@ const PatientRegistration = () => {
         allergies: patientData.allergies,
         current_medications: patientData.medications,
         assigned_doctor_id: actualDoctorUserId, // Use the verified doctor user_id from database
-        temp_password: tempPassword // Store temp password as fallback
+        invitation_status: 'pending' // Track invitation status
       };
 
       const { data: patientRecord, error: patientError } = await supabase
@@ -168,6 +177,7 @@ const PatientRegistration = () => {
         throw patientError;
       }
 
+<<<<<<< HEAD
       // Create a Clerk invitation for the patient
       const { data: inviteData, error: inviteError } = await supabase.functions.invoke('invite-patient', {
         body: {
@@ -203,14 +213,90 @@ const PatientRegistration = () => {
 
       // Clerk invitation email is sent automatically by Clerk's system
       // No need for separate email since Clerk handles the invitation process
+=======
+      // Send invitation email with doctor's user_id
+      try {
+        console.log('Attempting to send invitation email via Edge Function...');
+        console.log('Doctor user ID:', actualDoctorUserId);
+        console.log('Patient data:', {
+          name: `${patientData.firstName} ${patientData.lastName}`.trim(),
+          email: patientData.email
+        });
+
+        const { error: emailError } = await supabase.functions.invoke('send-patient-invitation', {
+          body: {
+            patientName: `${patientData.firstName} ${patientData.lastName}`.trim(),
+            patientEmail: patientData.email,
+            doctorName: user.name,
+            doctorUserId: actualDoctorUserId
+          }
+        });
+
+        if (emailError) {
+          console.error('Edge Function email failed:', emailError);
+          throw new Error(`Email service error: ${emailError.message}`);
+        }
+
+        console.log('Invitation email sent successfully via Edge Function');
+        toast({
+          title: "Patient registered successfully",
+          description: `Patient account created and invitation email sent to ${patientData.email}`,
+        });
+      } catch (emailError: any) {
+        console.error('Edge Function failed, falling back to manual credential sharing...', emailError);
+
+        // Fallback: Manual credential sharing
+        const tempPassword = Math.random().toString(36).slice(-12) + 'Temp123!';
+
+        try {
+          const { error: updateError } = await supabase
+            .from('patients')
+            .update({ temp_password: tempPassword } as any)
+            .eq('id', patientRecord.id);
+
+          if (updateError) {
+            console.warn('Failed to update patient with temp password:', updateError);
+          }
+
+          setPatientCredentials({
+            name: `${patientData.firstName} ${patientData.lastName}`.trim(),
+            email: patientData.email,
+            password: tempPassword
+          });
+          setShowCredentialsModal(true);
+
+          toast({
+            title: "Patient registered successfully",
+            description: "Email service unavailable. Please share the credentials manually with the patient.",
+            variant: "default",
+          });
+        } catch (fallbackError) {
+          console.error('Fallback mechanism also failed:', fallbackError);
+          toast({
+            title: "Registration completed",
+            description: "Patient registered but email services failed. Please contact support.",
+            variant: "destructive",
+          });
+        }
+      }
+
+      // Create a chat session for the doctor-patient communication
+      // Note: We'll create this when the patient actually signs up and gets a user_id
+      try {
+        const { data: chatSession, error: chatError } = await supabase
+          .from('chat_sessions')
+          .insert({
+            session_type: 'doctor-patient',
+            participant_1_id: actualDoctorUserId, // Doctor's user_id
+            participant_2_id: patientRecord.id,   // Use patient record ID as placeholder
+            title: `Chat with ${patientData.firstName} ${patientData.lastName}`.trim(),
+          })
+          .select()
+          .single();
+>>>>>>> 0616dda15e7755a245f8c9f2e6369a1c9fd79371
 
       // Chat session will be created when patient accepts invitation and signs in
       // For now, just mark the patient as registered with invitation pending
-
-      toast({
-        title: "Patient registered successfully",
-        description: `Patient account created and temporary password sent to ${patientData.email}`,
-      });
 
       // Reset form
       setPatientData({
@@ -231,6 +317,7 @@ const PatientRegistration = () => {
 
       navigate('/patients');
     } catch (error: any) {
+      console.error('Registration failed:', error);
       toast({
         title: "Registration failed",
         description: error.message || "Failed to register patient",

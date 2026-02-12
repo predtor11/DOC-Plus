@@ -21,12 +21,13 @@ interface DoctorPatientMessage {
 
 interface DoctorPatientChatSession {
   id: string;
-  doctor_id: string;
-  patient_id: string;
+  participant_1_id: string;
+  participant_2_id: string;
   title: string;
   last_message_at: string | null;
   created_at: string;
   updated_at: string;
+  session_type?: string;
 }
 
 interface DoctorPatientChatWindowProps {
@@ -52,34 +53,90 @@ const DoctorPatientChatWindow: React.FC<DoctorPatientChatWindowProps> = ({
     loading: messagesLoading,
     sendMessage: sendDoctorPatientMessage,
     fetchMessages: fetchDoctorPatientMessages,
+    getOrCreateSession,
   } = useDoctorPatientChat(session?.id || null);
+
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(session?.id || null);
+
+  useEffect(() => {
+    if (session) {
+      setCurrentSessionId(session.id);
+    }
+  }, [session]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   const sendMessage = async () => {
-    if (!newMessage.trim() || !session?.id || !user?.id) return;
+    if (!newMessage.trim() || !user?.id) return;
 
     setError(null);
 
     try {
+      let sessionIdToSend = currentSessionId;
+
+      // If there's no active session, try to get or create one
+      if (!sessionIdToSend && session) {
+        // Use the session from props if available
+        sessionIdToSend = session.id;
+        setCurrentSessionId(session.id);
+      }
+
+      if (!sessionIdToSend) {
+        // Determine doctor and patient IDs based on user role and session data
+        let doctorId: string;
+        let patientId: string;
+
+        if (user?.role === 'doctor') {
+          doctorId = user.id;
+          // For now, we'll assume the other participant is a patient
+          // In a real app, you'd get this from the session or route params
+          patientId = session?.participant_2_id || session?.participant_1_id || '';
+        } else {
+          patientId = user.id;
+          // For now, we'll assume the other participant is a doctor
+          doctorId = session?.participant_1_id || session?.participant_2_id || '';
+        }
+
+        if (doctorId && patientId && doctorId !== patientId) {
+          console.log('Creating new session for:', { doctorId, patientId });
+          const newSessionId = await getOrCreateSession(doctorId, patientId);
+          if (newSessionId) {
+            sessionIdToSend = newSessionId;
+            setCurrentSessionId(newSessionId);
+          } else {
+            throw new Error("Could not establish a chat session.");
+          }
+        } else {
+          throw new Error("Cannot determine doctor and patient IDs.");
+        }
+      }
+
+      if (!sessionIdToSend) {
+        throw new Error("No active session to send message to.");
+      }
+
       console.log('Sending doctor-patient message:', {
-        sessionId: session.id,
+        sessionId: sessionIdToSend,
         content: newMessage.trim(),
         senderId: user.id
       });
 
-      // Use the hook's sendMessage function
-      await sendDoctorPatientMessage(newMessage.trim());
-      setNewMessage('');
-      onSessionUpdate?.();
-    } catch (err) {
+      // Use the hook's sendMessage function, passing the correct session ID
+      const result = await sendDoctorPatientMessage(newMessage.trim(), sessionIdToSend);
+      if (result) {
+        setNewMessage('');
+        onSessionUpdate?.();
+      } else {
+        throw new Error("Message sending failed, but no error was thrown from hook.");
+      }
+    } catch (err: any) {
       console.error('Error sending doctor-patient message:', err);
-      setError('Failed to send message');
+      setError(err.message || 'Failed to send message');
       toast({
         title: "Error",
-        description: "Failed to send message",
+        description: err.message || "Failed to send message",
         variant: "destructive",
       });
     }
@@ -93,7 +150,7 @@ const DoctorPatientChatWindow: React.FC<DoctorPatientChatWindowProps> = ({
   };
 
   const getMessageIcon = (message: DoctorPatientMessage) => {
-    if (message.sender_id === user?.id) {
+    if (message.sender_id === (user?.auth_user_id || user?.id)) {
       return <User className="h-4 w-4" />;
     } else {
       return <Stethoscope className="h-4 w-4" />;
@@ -101,7 +158,7 @@ const DoctorPatientChatWindow: React.FC<DoctorPatientChatWindowProps> = ({
   };
 
   const getMessageStyle = (message: DoctorPatientMessage) => {
-    if (message.sender_id === user?.id) {
+    if (message.sender_id === (user?.auth_user_id || user?.id)) {
       return 'bg-primary text-primary-foreground ml-16';
     } else {
       return 'bg-muted text-muted-foreground mr-16';
@@ -109,7 +166,7 @@ const DoctorPatientChatWindow: React.FC<DoctorPatientChatWindowProps> = ({
   };
 
   const getSenderName = (message: DoctorPatientMessage) => {
-    if (message.sender_id === user?.id) {
+    if (message.sender_id === (user?.auth_user_id || user?.id)) {
       return 'You';
     } else {
       return user?.role === 'doctor' ? 'Patient' : 'Doctor';
@@ -172,7 +229,7 @@ const DoctorPatientChatWindow: React.FC<DoctorPatientChatWindowProps> = ({
                 <div
                   key={message.id}
                   className={`flex ${
-                    message.sender_id === user?.id ? 'justify-end' : 'justify-start'
+                    message.sender_id === (user?.auth_user_id || user?.id) ? 'justify-end' : 'justify-start'
                   }`}
                 >
                   <div className={`max-w-[80%] p-3 rounded-lg ${getMessageStyle(message)}`}>

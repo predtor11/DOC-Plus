@@ -185,6 +185,7 @@ export const useMessages = (sessionId: string | null) => {
     }
   }, [sessionId]);
 
+<<<<<<< HEAD
   // Real-time subscription for messages
   useEffect(() => {
     if (!sessionId) {
@@ -196,6 +197,20 @@ export const useMessages = (sessionId: string | null) => {
 
     const channel = supabase
       .channel(`ai-messages:${sessionId}`)
+=======
+  // Realtime subscription for new messages
+  useEffect(() => {
+    if (!sessionId) return;
+
+    console.log('Setting up realtime subscription for messages in session:', sessionId);
+
+    // Create a unique channel for this chat session
+    const channelName = `chat-messages-${sessionId}-${Date.now()}`;
+    console.log('Creating channel:', channelName);
+    
+    const channel = supabase
+      .channel(channelName)
+>>>>>>> 0616dda15e7755a245f8c9f2e6369a1c9fd79371
       .on(
         'postgres_changes',
         {
@@ -205,6 +220,7 @@ export const useMessages = (sessionId: string | null) => {
           filter: `session_id=eq.${sessionId}`,
         },
         (payload) => {
+<<<<<<< HEAD
           console.log('useMessages: Real-time new message received:', payload);
           setMessages(prev => {
             // Check if message already exists to avoid duplicates
@@ -214,10 +230,24 @@ export const useMessages = (sessionId: string | null) => {
               return prev;
             }
             console.log('useMessages: Adding new message to messages array');
+=======
+          console.log('Realtime message received in useMessages:', payload);
+
+          // Only add the message if it's not already in our state (to avoid duplicates)
+          setMessages(prev => {
+            const messageExists = prev.some(msg => msg.id === payload.new.id);
+            if (messageExists) {
+              console.log('Message already exists in useMessages, skipping:', payload.new.id);
+              return prev;
+            }
+
+            console.log('Adding new message to useMessages state:', payload.new);
+>>>>>>> 0616dda15e7755a245f8c9f2e6369a1c9fd79371
             return [...prev, payload.new as Message];
           });
         }
       )
+<<<<<<< HEAD
       .on(
         'postgres_changes',
         {
@@ -243,6 +273,42 @@ export const useMessages = (sessionId: string | null) => {
 
     return () => {
       console.log('useMessages: Cleaning up real-time subscription for messages in session:', sessionId);
+=======
+      .subscribe((status, err) => {
+        console.log('useMessages realtime subscription status:', status);
+        if (err) {
+          console.error('Realtime subscription error details:', err);
+          console.error('Error message:', err.message);
+          console.error('Error name:', err.name);
+          
+          // Log additional context for debugging
+          console.error('Session ID:', sessionId);
+          console.error('User ID:', user?.id);
+          console.error('Channel name:', channelName);
+        }
+        
+        if (status === 'SUBSCRIBED') {
+          console.log('Successfully subscribed to realtime updates for messages in session:', sessionId);
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('Realtime subscription CHANNEL_ERROR for messages in session:', sessionId, err);
+          
+          // Attempt to reconnect after a delay
+          setTimeout(() => {
+            console.log('Attempting to reconnect realtime subscription for session:', sessionId);
+            // The useEffect will re-run and create a new subscription
+          }, 5000);
+          
+        } else if (status === 'TIMED_OUT') {
+          console.warn('Realtime subscription TIMED_OUT for messages in session:', sessionId);
+        } else if (status === 'CLOSED') {
+          console.log('Realtime subscription CLOSED for messages in session:', sessionId);
+        }
+      });
+
+    // Cleanup function to unsubscribe when component unmounts or sessionId changes
+    return () => {
+      console.log('Cleaning up realtime subscription for messages in session:', sessionId);
+>>>>>>> 0616dda15e7755a245f8c9f2e6369a1c9fd79371
       supabase.removeChannel(channel);
     };
   }, [sessionId]);

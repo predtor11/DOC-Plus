@@ -67,27 +67,75 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isCheckingProfile, setIsCheckingProfile] = useState(false);
 
   useEffect(() => {
-    console.log('🔄 AuthProvider useEffect triggered:', {
-      isClerkLoaded,
-      clerkUser: clerkUser ? { id: clerkUser.id, email: clerkUser.primaryEmailAddress?.emailAddress } : null
-    });
+    const checkAuthState = async () => {
+      console.log('🔄 AuthProvider useEffect triggered:', {
+        isClerkLoaded,
+        clerkUser: clerkUser ? { id: clerkUser.id, email: clerkUser.primaryEmailAddress?.emailAddress } : null
+      });
 
-    if (!isClerkLoaded) {
-      console.log('⏳ Clerk not loaded yet, waiting...');
-      setIsLoading(true);
-      return;
-    }
+      if (!isClerkLoaded) {
+        console.log('⏳ Clerk not loaded yet, waiting...');
+        setIsLoading(true);
+        return;
+      }
 
-    if (clerkUser) {
-      console.log('✅ Clerk user found, setting up Supabase OAuth');
-      setupSupabaseOAuth(clerkUser);
-    } else {
-      console.log('❌ No Clerk user, clearing state');
-      setUser(null);
-      setSession(null);
-      setIsLoading(false);
-      setIsCheckingProfile(false);
-    }
+      if (clerkUser) {
+        console.log('✅ Clerk user found, checking metadata and setting up profile');
+
+        // Force reload Clerk user to ensure latest metadata
+        console.log('🔄 Force reloading Clerk user...');
+        await clerkUser.reload();
+        console.log('✅ Clerk user reloaded');
+
+        // Check if user has completed onboarding via Clerk metadata
+        const userRole = clerkUser.unsafeMetadata?.role as 'doctor' | 'patient' | undefined;
+        const onboardingComplete = clerkUser.unsafeMetadata?.onboardingComplete as boolean;
+
+        console.log('🔍 Clerk metadata - Role:', userRole, 'Onboarding complete:', onboardingComplete);
+        console.log('🔍 Full Clerk metadata:', JSON.stringify(clerkUser.unsafeMetadata, null, 2));
+
+        if (userRole && onboardingComplete) {
+          // User has completed onboarding, load their profile from database
+          console.log('✅ User has completed onboarding, loading profile from database');
+          setupSupabaseOAuth(clerkUser);
+        } else if (userRole && !onboardingComplete) {
+          // User has selected role but hasn't completed onboarding - set minimal user state
+          console.log('🔄 User has selected role but not completed onboarding');
+          setUser({
+            id: clerkUser.id,
+            user_id: null, // No database profile yet
+            auth_user_id: clerkUser.id,
+            name: clerkUser.fullName || clerkUser.firstName || 'User',
+            email: clerkUser.primaryEmailAddress?.emailAddress,
+            role: userRole,
+            registration_no: null,
+            age: null,
+            gender: null,
+            phone: null,
+            medical_history: null,
+            assigned_doctor_id: null,
+          });
+          setSession(null);
+          setIsLoading(false);
+          setIsCheckingProfile(false);
+        } else {
+          // User hasn't selected role yet
+          console.log('⚠️ User has not selected role, setting user to null');
+          setUser(null);
+          setSession(null);
+          setIsLoading(false);
+          setIsCheckingProfile(false);
+        }
+      } else {
+        console.log('❌ No Clerk user, clearing state');
+        setUser(null);
+        setSession(null);
+        setIsLoading(false);
+        setIsCheckingProfile(false);
+      }
+    };
+
+    checkAuthState();
   }, [clerkUser, isClerkLoaded]);
 
   const setupSupabaseOAuth = async (clerkUser: any) => {
@@ -176,135 +224,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     console.log('🔍 Clerk user email:', clerkUser?.primaryEmailAddress?.emailAddress);
 
     try {
-      // Try to find existing profiles using different matching strategies
+      // Check Clerk metadata first
+      const userRole = clerkUser?.unsafeMetadata?.role as 'doctor' | 'patient' | undefined;
+      const onboardingComplete = clerkUser?.unsafeMetadata?.onboardingComplete as boolean;
 
-      // Strategy 1: Try to match by clerk_user_id (if migration was applied)
+      console.log('🔍 Metadata check - Role:', userRole, 'Complete:', onboardingComplete);
+
+      if (!userRole || !onboardingComplete) {
+        console.log('⚠️ User has not completed onboarding via metadata');
+        setUser(null);
+        setIsLoading(false);
+        setIsCheckingProfile(false);
+        return;
+      }
+
+      // Strategy 1: Try to match by clerk_user_id (primary method)
       console.log('🔍 Strategy 1: Looking for profiles by clerk_user_id');
 
-      // Check doctors table - use safe bulk query approach
-      try {
-        const { data: doctors } = await supabase
-          .from('doctors')
-          .select('id, user_id, username, name, registration_no')
-          .limit(10);
-
-        const doctorByClerkId = doctors?.find(d => d.user_id === clerkUserId);
-
-        if (doctorByClerkId) {
-          console.log('✅ Found doctor profile by user_id');
-          const userData = {
-            id: clerkUserId,
-            user_id: doctorByClerkId.id,
-            auth_user_id: doctorByClerkId.user_id || clerkUserId,
-            username: doctorByClerkId.username,
-            name: doctorByClerkId.name,
-            email: clerkUser?.primaryEmailAddress?.emailAddress,
-            role: 'doctor' as const,
-            registration_no: doctorByClerkId.registration_no,
-          };
-          console.log('🔄 Setting user data:', userData);
-          setUser(userData);
-          setIsLoading(false);
-          setIsCheckingProfile(false);
-          return;
-        }
-      } catch (error) {
-        console.log('⚠️ No doctor found by user_id');
-      }
-
-      // Check patients table by user_id (primary method) - use safe bulk query approach
-      try {
-        const { data: patients } = await supabase
-          .from('patients')
-          .select('id, user_id, name, email, age, gender, phone, medical_history, assigned_doctor_id')
-          .limit(10);
-
-        const patientByUserId = patients?.find(p => p.user_id === clerkUserId);
-
-        if (patientByUserId) {
-          console.log('✅ Found patient profile by user_id');
-          const userData = {
-            id: clerkUserId,
-            user_id: patientByUserId.id,
-            auth_user_id: patientByUserId.user_id || clerkUserId,
-            name: patientByUserId.name,
-            email: clerkUser?.primaryEmailAddress?.emailAddress || patientByUserId.email,
-            role: 'patient' as const,
-            age: patientByUserId.age,
-            gender: patientByUserId.gender,
-            phone: patientByUserId.phone,
-            medical_history: patientByUserId.medical_history,
-            assigned_doctor_id: patientByUserId.assigned_doctor_id,
-          };
-          console.log('🔄 Setting user data:', userData);
-          setUser(userData);
-          setIsLoading(false);
-          setIsCheckingProfile(false);
-          return;
-        }
-      } catch (error) {
-        console.log('⚠️ No patient found by user_id');
-      }
-
-      // Fallback: Try user_id if it exists - use safe bulk query approach
-      try {
-        const { data: patients } = await supabase
-          .from('patients')
-          .select('id, user_id, name, email, age, gender, phone, medical_history, assigned_doctor_id')
-          .limit(10);
-
-        const patientByClerkId = patients?.find(p => p.user_id === clerkUserId);
-
-        if (patientByClerkId) {
-          console.log('✅ Found patient profile by user_id');
-          const userData = {
-            id: clerkUserId,
-            user_id: patientByClerkId.id,
-            auth_user_id: patientByClerkId.user_id || clerkUserId,
-            name: patientByClerkId.name,
-            email: clerkUser?.primaryEmailAddress?.emailAddress || patientByClerkId.email,
-            role: 'patient' as const,
-            age: patientByClerkId.age,
-            gender: patientByClerkId.gender,
-            phone: patientByClerkId.phone,
-            medical_history: patientByClerkId.medical_history,
-            assigned_doctor_id: patientByClerkId.assigned_doctor_id,
-          };
-          console.log('🔄 Setting user data:', userData);
-          setUser(userData);
-          setIsLoading(false);
-          setIsCheckingProfile(false);
-          return;
-        }
-      } catch (error) {
-        console.log('⚠️ No patient found by user_id (column may not exist)');
-      }
-
-      // Strategy 2: Try to match by name (fallback)
-      const clerkName = `${clerkUser?.firstName || ''} ${clerkUser?.lastName || ''}`.trim();
-      console.log('🔍 Strategy 2: Looking for profiles by name:', clerkName);
-
-      if (clerkName && clerkName !== ' ') {
-        // Check doctors by name - use safe bulk query approach
+      if (userRole === 'doctor') {
+        // Check doctors table by clerk_user_id
         try {
           const { data: doctors } = await supabase
             .from('doctors')
             .select('id, user_id, username, name, registration_no')
-            .limit(10);
+            .eq('clerk_user_id', clerkUserId)
+            .limit(1);
 
-          const doctorByName = doctors?.find(d => d.name === clerkName);
-
-          if (doctorByName) {
-            console.log('✅ Found doctor profile by name');
+          if (doctors && doctors.length > 0) {
+            const doctor = doctors[0];
+            console.log('✅ Found doctor profile by clerk_user_id');
             const userData = {
               id: clerkUserId,
-              user_id: doctorByName.id,
-              auth_user_id: doctorByName.user_id || clerkUserId,
-              username: doctorByName.username,
-              name: doctorByName.name,
+              user_id: doctor.id,
+              auth_user_id: doctor.user_id || clerkUserId,
+              username: doctor.username,
+              name: doctor.name,
               email: clerkUser?.primaryEmailAddress?.emailAddress,
               role: 'doctor' as const,
-              registration_no: doctorByName.registration_no,
+              registration_no: doctor.registration_no,
             };
             console.log('🔄 Setting user data:', userData);
             setUser(userData);
@@ -313,32 +270,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             return;
           }
         } catch (error) {
-          console.log('⚠️ No doctor found by name');
+          console.log('⚠️ No doctor found by clerk_user_id');
         }
-
-        // Check patients by name - use safe bulk query approach
+      } else if (userRole === 'patient') {
+        // Check patients table by clerk_user_id
         try {
           const { data: patients } = await supabase
             .from('patients')
             .select('id, user_id, name, email, age, gender, phone, medical_history, assigned_doctor_id')
-            .limit(10);
+            .eq('clerk_user_id', clerkUserId)
+            .limit(1);
 
-          const patientByName = patients?.find(p => p.name === clerkName);
-
-          if (patientByName) {
-            console.log('✅ Found patient profile by name');
+          if (patients && patients.length > 0) {
+            const patient = patients[0];
+            console.log('✅ Found patient profile by clerk_user_id');
             const userData = {
               id: clerkUserId,
-              user_id: patientByName.id,
-              auth_user_id: patientByName.user_id || clerkUserId,
-              name: patientByName.name,
-              email: clerkUser?.primaryEmailAddress?.emailAddress || patientByName.email,
+              user_id: patient.id,
+              auth_user_id: patient.user_id || clerkUserId,
+              name: patient.name,
+              email: clerkUser?.primaryEmailAddress?.emailAddress || patient.email,
               role: 'patient' as const,
-              age: patientByName.age,
-              gender: patientByName.gender,
-              phone: patientByName.phone,
-              medical_history: patientByName.medical_history,
-              assigned_doctor_id: patientByName.assigned_doctor_id,
+              age: patient.age,
+              gender: patient.gender,
+              phone: patient.phone,
+              medical_history: patient.medical_history,
+              assigned_doctor_id: patient.assigned_doctor_id,
             };
             console.log('🔄 Setting user data:', userData);
             setUser(userData);
@@ -347,103 +304,82 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             return;
           }
         } catch (error) {
-          console.log('⚠️ No patient found by name');
+          console.log('⚠️ No patient found by clerk_user_id');
         }
       }
 
-      // Strategy 3: Try to match patients by email (if email column exists)
-      const userEmail = clerkUser?.primaryEmailAddress?.emailAddress;
-      console.log('🔍 Strategy 3: Looking for patients by email:', userEmail);
+      // Strategy 2: Fallback to user_id if clerk_user_id didn't work
+      console.log('🔍 Strategy 2: Looking for profiles by user_id');
 
-      if (userEmail) {
+      if (userRole === 'doctor') {
+        // Check doctors table by user_id
         try {
-          const { data: patients } = await supabase
-            .from('patients')
-            .select('id, user_id, name, email, age, gender, phone, medical_history, assigned_doctor_id')
-            .limit(10);
+          const { data: doctors } = await supabase
+            .from('doctors')
+            .select('id, user_id, username, name, registration_no')
+            .eq('user_id', clerkUserId)
+            .limit(1);
 
-          const patientByEmail = patients?.find(p => p.email === userEmail);
-
-          if (patientByEmail) {
-            console.log('✅ Found patient profile by email');
-            setUser({
+          if (doctors && doctors.length > 0) {
+            const doctor = doctors[0];
+            console.log('✅ Found doctor profile by user_id');
+            const userData = {
               id: clerkUserId,
-              user_id: patientByEmail.id,
-              auth_user_id: patientByEmail.user_id || clerkUserId,
-              name: patientByEmail.name,
-              email: userEmail,
-              role: 'patient',
-              age: patientByEmail.age,
-              gender: patientByEmail.gender,
-              phone: patientByEmail.phone,
-              medical_history: patientByEmail.medical_history,
-              assigned_doctor_id: patientByEmail.assigned_doctor_id,
-            });
+              user_id: doctor.id,
+              auth_user_id: doctor.user_id || clerkUserId,
+              username: doctor.username,
+              name: doctor.name,
+              email: clerkUser?.primaryEmailAddress?.emailAddress,
+              role: 'doctor' as const,
+              registration_no: doctor.registration_no,
+            };
+            console.log('🔄 Setting user data:', userData);
+            setUser(userData);
             setIsLoading(false);
             setIsCheckingProfile(false);
             return;
           }
         } catch (error) {
-          console.log('⚠️ No patient found by email or email column doesn\'t exist');
+          console.log('⚠️ No doctor found by user_id');
         }
-      }
+      } else if (userRole === 'patient') {
+        // Check patients table by user_id
+        try {
+          const { data: patients } = await supabase
+            .from('patients')
+            .select('id, user_id, name, email, age, gender, phone, medical_history, assigned_doctor_id')
+            .eq('user_id', clerkUserId)
+            .limit(1);
 
-      // Strategy 3: Try to find all doctors and match by various criteria
-      console.log('🔍 Strategy 3: Checking all doctors for matches');
-
-      try {
-        const { data: allDoctors } = await supabase
-          .from('doctors')
-          .select('id, user_id, username, name, registration_no');
-
-        if (allDoctors) {
-          // Try to match by user_id
-          const doctorByUserId = allDoctors.find(doc => doc.user_id === clerkUserId);
-          if (doctorByUserId) {
-            console.log('✅ Found doctor by user_id from all doctors list');
-            setUser({
+          if (patients && patients.length > 0) {
+            const patient = patients[0];
+            console.log('✅ Found patient profile by user_id');
+            const userData = {
               id: clerkUserId,
-              user_id: doctorByUserId.id,
-              auth_user_id: doctorByUserId.user_id || clerkUserId,
-              username: doctorByUserId.username,
-              name: doctorByUserId.name,
-              email: clerkUser?.primaryEmailAddress?.emailAddress,
-              role: 'doctor',
-              registration_no: doctorByUserId.registration_no,
-            });
+              user_id: patient.id,
+              auth_user_id: patient.user_id || clerkUserId,
+              name: patient.name,
+              email: clerkUser?.primaryEmailAddress?.emailAddress || patient.email,
+              role: 'patient' as const,
+              age: patient.age,
+              gender: patient.gender,
+              phone: patient.phone,
+              medical_history: patient.medical_history,
+              assigned_doctor_id: patient.assigned_doctor_id,
+            };
+            console.log('🔄 Setting user data:', userData);
+            setUser(userData);
             setIsLoading(false);
             setIsCheckingProfile(false);
             return;
           }
-
-          // Try to match by name
-          const clerkName = `${clerkUser?.firstName || ''} ${clerkUser?.lastName || ''}`.trim();
-          if (clerkName && clerkName !== ' ') {
-            const doctorByName = allDoctors.find(doc => doc.name === clerkName);
-            if (doctorByName) {
-              console.log('✅ Found doctor by name from all doctors list');
-              setUser({
-                id: clerkUserId,
-                user_id: doctorByName.id,
-                auth_user_id: doctorByName.user_id || clerkUserId,
-                username: doctorByName.username,
-                name: doctorByName.name,
-                email: clerkUser?.primaryEmailAddress?.emailAddress,
-                role: 'doctor',
-                registration_no: doctorByName.registration_no,
-              });
-              setIsLoading(false);
-              setIsCheckingProfile(false);
-              return;
-            }
-          }
+        } catch (error) {
+          console.log('⚠️ No patient found by user_id');
         }
-      } catch (error) {
-        console.log('⚠️ Error checking all doctors:', error);
       }
 
-      // Strategy 5: If no profile found, redirect to onboarding
-      console.log('⚠️ No existing profile found, redirecting to onboarding');
+      // Strategy 3: If no profile found, user might need to complete onboarding
+      console.log('⚠️ No existing profile found for completed onboarding user');
       console.log('🔄 Setting user to null and isLoading to false');
       setUser(null);
       setIsLoading(false);

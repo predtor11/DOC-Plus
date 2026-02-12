@@ -51,7 +51,7 @@ const DoctorChat = () => {
   };
 
   const getMessageStyle = (message: Message) => {
-    if (message.sender_id === user?.id) {
+    if (message.sender_id === (user?.auth_user_id || user?.id)) {
       return 'bg-primary text-primary-foreground ml-12';
     } else {
       return 'bg-muted text-muted-foreground mr-12';
@@ -59,7 +59,7 @@ const DoctorChat = () => {
   };
 
   const getSenderName = (message: Message) => {
-    if (message.sender_id === user?.id) {
+    if (message.sender_id === (user?.auth_user_id || user?.id)) {
       return 'You';
     } else {
       return user?.role === 'doctor' ? 'Patient' : 'Your Doctor';
@@ -67,7 +67,7 @@ const DoctorChat = () => {
   };
 
   const getSenderIcon = (message: Message) => {
-    if (message.sender_id === user?.id) {
+    if (message.sender_id === (user?.auth_user_id || user?.id)) {
       return user?.role === 'doctor' ? (
         <Stethoscope className="h-4 w-4" />
       ) : (
@@ -125,7 +125,7 @@ const DoctorChat = () => {
               <div
                 key={message.id}
                 className={`flex ${
-                  message.sender_id === user?.id ? 'justify-end' : 'justify-start'
+                  message.sender_id === (user?.auth_user_id || user?.id) ? 'justify-end' : 'justify-start'
                 }`}
               >
                 <div className={`max-w-[80%] p-3 rounded-lg ${getMessageStyle(message)}`}>

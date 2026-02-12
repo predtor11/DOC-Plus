@@ -29,7 +29,7 @@ const SignInPage = () => {
       // Navigate based on user role
       setTimeout(() => {
         if (user?.role === 'doctor') {
-          navigate('/dashboard');
+          navigate('/ai-chat');
         } else if (user?.role === 'patient') {
           navigate('/dashboard');
         } else {

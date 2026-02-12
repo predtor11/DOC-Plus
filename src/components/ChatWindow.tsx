@@ -4,7 +4,7 @@ import remarkGfm from 'remark-gfm';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Send, Bot, User, Stethoscope, MessageCircle } from 'lucide-react';
+import { Send, Bot, User, Stethoscope, MessageCircle, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMessages } from '@/hooks/useChatSessions';
 import { supabase } from '@/integrations/supabase/client';
@@ -15,6 +15,7 @@ import type { Database } from '@/integrations/supabase/types';
 
 type ChatSession = Database['public']['Tables']['chat_sessions']['Row'];
 type Message = Database['public']['Tables']['messages']['Row'];
+type Patient = Database['public']['Tables']['patients']['Row'];
 
 interface ChatWindowProps {
   session: ChatSession | null;
@@ -27,17 +28,120 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, onSessionUpdate, onNew
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const { user } = useAuth();
   const { toast } = useToast();
   const { messages, sendMessage, fetchMessages } = useMessages(session?.id || null);
+
+  // @ mention state - only for doctors in ai-doctor sessions
+  const isDoctorAIChat = user?.role === 'doctor' && session?.session_type === 'ai-doctor';
+  const [showPatientList, setShowPatientList] = useState(false);
+  const [patientSearch, setPatientSearch] = useState('');
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [cursorPosition, setCursorPosition] = useState(0);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  // Fetch patients for @ mention - only for doctors
+  const fetchPatients = async (searchTerm: string = '') => {
+    if (!isDoctorAIChat) return;
+    
+    try {
+      let query = supabase.from('patients').select('*');
+      
+      if (searchTerm) {
+        query = query.ilike('name', `%${searchTerm}%`);
+      }
+      
+      const { data, error } = await query.limit(10);
+      
+      if (error) {
+        console.error('Error fetching patients:', error);
+        return;
+      }
+      
+      setPatients(data || []);
+    } catch (error) {
+      console.error('Error fetching patients:', error);
+    }
+  };
+
+  // Get patient context for AI
+  const getPatientContext = (patient: Patient): string => {
+    return `Patient Context:
+Name: ${patient.name}
+Age: ${patient.age || 'Not specified'}
+Gender: ${patient.gender || 'Not specified'}
+Medical History: ${patient.medical_history || 'Not available'}
+Current Medications: ${patient.current_medications || 'None specified'}
+Allergies: ${patient.allergies || 'None specified'}
+Phone: ${patient.phone || 'Not provided'}
+Email: ${patient.email || 'Not provided'}
+Emergency Contact: ${patient.emergency_contact_name || 'Not provided'} (${patient.emergency_contact_phone || 'Not provided'})
+Address: ${patient.address || 'Not provided'}`;
+  };
+
+  // Handle @ mention input - only for doctors
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    const cursorPos = e.target.selectionStart || 0;
+    
+    setNewMessage(value);
+    setCursorPosition(cursorPos);
+    
+    if (!isDoctorAIChat) return;
+    
+    // Check if @ is typed
+    const textBeforeCursor = value.substring(0, cursorPos);
+    const atIndex = textBeforeCursor.lastIndexOf('@');
+    
+    if (atIndex !== -1) {
+      const searchTerm = textBeforeCursor.substring(atIndex + 1);
+      setPatientSearch(searchTerm);
+      setShowPatientList(true);
+      fetchPatients(searchTerm);
+    } else {
+      setShowPatientList(false);
+      setPatientSearch('');
+    }
+  };
+
+  // Handle patient selection - only for doctors
+  const handlePatientSelect = (patient: Patient) => {
+    if (!isDoctorAIChat) return;
+    
+    const textBeforeAt = newMessage.substring(0, newMessage.lastIndexOf('@'));
+    const textAfterCursor = newMessage.substring(cursorPosition);
+    const newText = `${textBeforeAt}@${patient.name} ${textAfterCursor}`;
+    
+    setNewMessage(newText);
+    setSelectedPatient(patient);
+    setShowPatientList(false);
+    setPatientSearch('');
+    
+    // Focus back to input
+    setTimeout(() => {
+      inputRef.current?.focus();
+      const newCursorPos = textBeforeAt.length + patient.name.length + 1;
+      inputRef.current?.setSelectionRange(newCursorPos, newCursorPos);
+    }, 0);
+  };
+
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Clear selected patient when session changes - only for doctors
+  useEffect(() => {
+    if (isDoctorAIChat) {
+      setSelectedPatient(null);
+      setShowPatientList(false);
+      setPatientSearch('');
+    }
+  }, [session?.id, isDoctorAIChat]);
 
   // Mark messages as read when session changes or new messages arrive
   useEffect(() => {
@@ -51,31 +155,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, onSessionUpdate, onNew
     }
   }, [session?.id, user?.id, messages.length]);
 
-  // Real-time subscription for messages
-  useEffect(() => {
-    if (!session?.id) return;
-
-    const channel = supabase
-      .channel(`messages:${session.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `session_id=eq.${session.id}`,
-        },
-        (payload) => {
-          // Refetch messages to ensure consistency
-          fetchMessages();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [session?.id, fetchMessages]);
+  // Real-time subscription is now handled by the useMessages hook
+  // No need for additional subscription here as it's already implemented in the hook
 
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !session) return;
@@ -108,10 +189,14 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, onSessionUpdate, onNew
       // Generate AI response if this is an AI session
       if (session.session_type.includes('ai')) {
         try {
+          const patientContext = (isDoctorAIChat && selectedPatient) ? getPatientContext(selectedPatient) : undefined;
+          
           const aiResult = await OpenRouterService.generateDoctorResponse(
             messageContent,
             messages, // Pass conversation history
-            session.session_type
+            session.session_type,
+            patientContext,
+            undefined // fileContext - can be added later if needed
           );
 
           if (aiResult.success && aiResult.response) {
@@ -143,10 +228,19 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, onSessionUpdate, onNew
   const getMessageIcon = (message: Message) => {
     if (message.is_ai_message) {
       return <Bot className="h-4 w-4" />;
-    } else if (message.sender_id === user?.id) {
-      return <User className="h-4 w-4" />;
+    }
+    
+    const isDoctorPatientChat = session?.session_type === 'doctor-patient';
+    const isCurrentUserMessage = message.sender_id === (user?.auth_user_id || user?.id);
+    
+    if (isDoctorPatientChat) {
+      if (user?.role === 'doctor') {
+        return isCurrentUserMessage ? <User className="h-4 w-4" /> : <Stethoscope className="h-4 w-4" />;
+      } else {
+        return isCurrentUserMessage ? <User className="h-4 w-4" /> : <Stethoscope className="h-4 w-4" />;
+      }
     } else {
-      return <Stethoscope className="h-4 w-4" />;
+      return isCurrentUserMessage ? <User className="h-4 w-4" /> : <Stethoscope className="h-4 w-4" />;
     }
   };
 
@@ -158,10 +252,21 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, onSessionUpdate, onNew
   const getSenderName = (message: Message) => {
     if (message.is_ai_message) {
       return session?.session_type === 'ai-doctor' ? 'AI Assistant' : 'AI Support';
-    } else if (message.sender_id === user?.id) {
-      return 'You';
+    } 
+    
+    const isDoctorPatientChat = session?.session_type === 'doctor-patient';
+    const isCurrentUserMessage = message.sender_id === (user?.auth_user_id || user?.id);
+    
+    if (isDoctorPatientChat) {
+      // For doctor-patient chat
+      if (user?.role === 'doctor') {
+        return isCurrentUserMessage ? 'You' : 'Patient';
+      } else {
+        return isCurrentUserMessage ? 'You' : 'Doctor';
+      }
     } else {
-      return user?.role === 'doctor' ? 'Patient' : 'Doctor';
+      // For AI chats
+      return isCurrentUserMessage ? 'You' : (user?.role === 'doctor' ? 'Patient' : 'Doctor');
     }
   };
 
@@ -248,7 +353,16 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, onSessionUpdate, onNew
           )}
           
           {messages.map((message) => {
-            const isUserMessage = message.sender_id === user?.id && !message.is_ai_message;
+            const isCurrentUserMessage = message.sender_id === (user?.auth_user_id || user?.id) && !message.is_ai_message;
+            const isDoctorPatientChat = session?.session_type === 'doctor-patient';
+            
+            // For doctor-patient chat, doctor's messages should appear on right as "You"
+            // For patients, doctor's messages appear on left as "Doctor"
+            // For doctors, patient's messages appear on left as "Patient"
+            const isUserMessage = isDoctorPatientChat 
+              ? (user?.role === 'doctor' ? isCurrentUserMessage : false)
+              : isCurrentUserMessage;
+            
             const isAIMessage = message.is_ai_message;
             
             return (
@@ -347,14 +461,47 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, onSessionUpdate, onNew
       </div>
 
       {/* Message Input */}
-      <div className="px-6 py-4 border-t bg-white">
+      <div className="px-6 py-4 border-t bg-white relative">
         <div className="max-w-3xl mx-auto">
+          {/* Patient List Dropdown - only for doctors */}
+          {isDoctorAIChat && showPatientList && patients.length > 0 && (
+            <div className="absolute bottom-full mb-2 left-6 right-6 max-w-3xl mx-auto bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto z-10">
+              {patients.map((patient) => (
+                <div
+                  key={patient.id}
+                  className="px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                  onClick={() => handlePatientSelect(patient)}
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                      <User className="h-4 w-4 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900">{patient.name}</p>
+                      <p className="text-sm text-gray-500">
+                        {patient.age && `${patient.age} years old`}
+                        {patient.gender && ` • ${patient.gender}`}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="flex items-center space-x-3">
             <Input
+              ref={inputRef}
               value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              placeholder="Type your message..."
-              onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+              onChange={handleInputChange}
+              placeholder={isDoctorAIChat ? "Type your message... (use @ to mention patients)" : "Type your message..."}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter' && (!isDoctorAIChat || !showPatientList)) {
+                  handleSendMessage();
+                } else if (e.key === 'Escape' && isDoctorAIChat) {
+                  setShowPatientList(false);
+                }
+              }}
               disabled={isLoading}
               className="flex-1 border-gray-200 rounded-full px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
@@ -366,6 +513,19 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, onSessionUpdate, onNew
               <Send className="h-5 w-5" />
             </Button>
           </div>
+
+          {/* Selected Patient Indicator - only for doctors */}
+          {isDoctorAIChat && selectedPatient && (
+            <div className="mt-2 flex items-center space-x-2 text-sm text-gray-600">
+              <span>Context: {selectedPatient.name}</span>
+              <button
+                onClick={() => setSelectedPatient(null)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
