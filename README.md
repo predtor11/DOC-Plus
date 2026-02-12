@@ -1,111 +1,270 @@
-# Welcome to your Lovable project
+# Doc+ Medical Assistant
 
-## Patient Registration Fix
+A comprehensive healthcare communication platform that connects doctors and patients through secure, AI-powered conversations. Built with modern web technologies to provide seamless medical consultations, patient management, and therapeutic support.
 
-### Issue
-When doctors registered patients, temporary credentials were sent via email, but patients couldn't log in because Clerk accounts weren't being created properly.
+## 🌟 Features
 
-### Solution
-The patient registration system has been updated to use Clerk's invitation system:
+### For Doctors
+- **Patient Management**: Register and manage patient records with comprehensive medical history
+- **AI-Powered Consultations**: Get intelligent medical insights and treatment recommendations
+- **Secure Communication**: HIPAA-compliant messaging with patients
+- **File Analysis**: Upload and analyze medical documents, images, and reports
+- **Patient Context**: Access complete patient medical history during conversations
 
-1. **Clerk Invitations**: Patients now receive proper Clerk invitations instead of temporary passwords
-2. **Proper Authentication**: Patients can accept invitations and create real Clerk accounts
-3. **Database Integration**: Patient records are linked to Clerk user IDs when they sign in
+### For Patients
+- **Therapeutic Support**: AI-powered stress relief and mental health support
+- **Secure Messaging**: Direct communication with assigned doctors
+- **File Sharing**: Upload medical documents and images for doctor review
+- **Personal Health Tracking**: Maintain medical history and treatment records
 
-### Setup Required
+### AI Integration
+- **OpenRouter Integration**: Cloud-based AI models for enhanced capabilities
+- **GPT-OSS-20B Model**: Advanced AI model optimized for medical and therapeutic contexts
+- **Medical Knowledge**: Specialized prompts for healthcare and therapeutic contexts
 
-1. **Get your Clerk Secret Key**:
-   - Go to your [Clerk Dashboard](https://dashboard.clerk.com/)
-   - Navigate to API Keys
-   - Copy your "Secret Key"
-   - Replace `YOUR_CLERK_SECRET_KEY_HERE` in `.env` with the actual key
+## 🛠️ Tech Stack
 
-2. **Deploy the new function**:
-   ```bash
-   npx supabase functions deploy invite-patient
-   ```
+### Frontend
+- **React 18** - Modern React with hooks and functional components
+- **TypeScript** - Type-safe development
+- **Vite** - Fast build tool and development server
+- **Tailwind CSS** - Utility-first CSS framework
+- **shadcn/ui** - Beautiful, accessible UI components
+- **React Router** - Client-side routing
+- **React Query** - Data fetching and state management
 
-3. **Run the database migration**:
-   ```bash
-   npx supabase db push
-   ```
+### Backend & Database
+- **Supabase** - PostgreSQL database with real-time capabilities
+- **Clerk** - Authentication and user management
+- **Supabase Edge Functions** - Serverless functions for backend logic
 
-### How it works now
+### AI & Integrations
+- **OpenRouter** - Multi-provider AI API with GPT-OSS-20B
+- **Resend** - Email delivery service
 
-1. Doctor registers a patient → Clerk invitation is sent
-2. Patient receives email with invitation link
-3. Patient clicks link and creates Clerk account
-4. AuthContext automatically links the Clerk account to the patient record
-5. Patient can now log in normally
+## 📋 Prerequisites
 
-## Project info
+Before running this project, make sure you have the following installed:
 
-**URL**: https://lovable.dev/projects/783997ea-cab6-4e5f-9aca-08f482cfa4cb
+- **Node.js** (version 18 or higher)
+- **npm** or **yarn** package manager
+- **Git** for version control
 
-## How can I edit this code?
+## 🚀 Quick Start
 
-There are several ways of editing your application.
+### 1. Clone the Repository
 
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/783997ea-cab6-4e5f-9aca-08f482cfa4cb) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
+```bash
 git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
 cd <YOUR_PROJECT_NAME>
+```
 
-# Step 3: Install the necessary dependencies.
-npm i
+### 2. Install Dependencies
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+```bash
+npm install
+```
+
+### 3. Environment Setup
+
+The application is pre-configured with database and authentication services. You'll only need to set up your OpenRouter API key:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` with your OpenRouter API key:
+
+```env
+# AI Integration
+VITE_OPENROUTER_API_KEY=your_openrouter_api_key
+VITE_OPENROUTER_MODEL=openai/gpt-oss-20B
+```
+
+### 4. Start Development Server
+
+```bash
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+The application will be available at `http://localhost:8080`
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## 📁 Project Structure
 
-**Use GitHub Codespaces**
+```
+src/
+├── components/          # Reusable UI components
+│   ├── ui/             # shadcn/ui components
+│   ├── ChatWindow.tsx  # Main chat interface
+│   ├── FileUpload.tsx  # File upload component
+│   └── ...
+├── contexts/           # React contexts
+│   └── AuthContext.tsx # Authentication context
+├── hooks/              # Custom React hooks
+│   ├── useChatSessions.ts
+│   └── ...
+├── integrations/       # External service integrations
+│   └── supabase/       # Supabase client and types
+├── lib/                # Utility functions
+├── pages/              # Page components
+├── services/           # Business logic services
+└── test/               # Test files
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+supabase/
+├── config.toml         # Supabase configuration
+├── functions/          # Edge functions
+└── migrations/         # Database migrations
 
-## What technologies are used for this project?
+public/                 # Static assets
+├── logo.svg           # Application logo
+└── ...
+```
 
-This project is built with:
+## 🔧 Available Scripts
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+```bash
+# Development
+npm run dev              # Start development server
+npm run build           # Build for production
+npm run build:dev       # Build for development
+npm run preview         # Preview production build
 
-## How can I deploy this project?
+# Code Quality
+npm run lint            # Run ESLint
+```
 
-Simply open [Lovable](https://lovable.dev/projects/783997ea-cab6-4e5f-9aca-08f482cfa4cb) and click on Share -> Publish.
+## 🔐 Authentication Flow
 
-## Can I connect a custom domain to my Lovable project?
+### For Doctors
+1. Register/Login via Clerk (pre-configured)
+2. System automatically assigns "doctor" role
+3. Can register patients and manage their records
+4. Access to patient medical histories and conversations
 
-Yes, you can!
+### For Patients
+1. Receive invitation email from doctor
+2. Click invitation link and create Clerk account
+3. System automatically links to patient record
+4. Access to personal health records and doctor communications
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+## 🤖 AI Features
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+### GPT-OSS-20B Integration
+- **Advanced AI Model**: Uses OpenRouter's GPT-OSS-20B for intelligent responses
+- **Medical Expertise**: Specialized training for healthcare contexts
+- **Context-Aware Responses**: Uses patient medical history for personalized advice
+- **File Analysis**: Can analyze uploaded medical documents and images
+- **Treatment Recommendations**: Provides evidence-based suggestions
+
+### Therapeutic AI Support
+- **Stress Management**: Evidence-based techniques for anxiety and stress relief
+- **Emotional Support**: Empathetic listening and validation
+- **Coping Strategies**: Practical tools for mental health management
+- **Crisis Detection**: Recognizes signs of crisis and recommends professional help
+
+## 📧 Email Integration
+
+The application uses Resend for email delivery (pre-configured):
+
+1. **Patient Invitations**: Automated emails when doctors register patients
+2. **Notifications**: System alerts for important updates
+3. **Password Reset**: Secure password recovery flow
+
+## 🚀 Deployment
+
+### Vercel (Already Deployed)
+
+The application is deployed and running on Vercel. The deployment includes:
+
+- **Automatic Builds**: Code changes trigger automatic deployments
+- **Environment Variables**: All necessary environment variables are configured
+- **Database**: Supabase database is connected and configured
+- **Authentication**: Clerk authentication is set up and working
+- **AI Integration**: OpenRouter API with GPT-OSS-20B is configured
+
+### Production URL
+Access the live application at: [Your Vercel Domain]
+
+## 🔒 Security & Privacy
+
+### HIPAA Compliance
+- **Encrypted Communications**: All messages are encrypted in transit and at rest
+- **Access Controls**: Role-based permissions for doctors and patients
+- **Audit Logs**: Comprehensive logging of all system activities
+- **Data Minimization**: Only collect necessary health information
+
+### Authentication Security
+- **Clerk Integration**: Enterprise-grade authentication (pre-configured)
+- **JWT Tokens**: Secure token-based authorization
+- **Session Management**: Automatic session expiration and renewal
+
+## 🧪 Testing
+
+```bash
+# Run tests
+npm run test
+
+# Run tests with UI
+npm run test:ui
+
+# Run tests in watch mode
+npm run test:watch
+```
+
+## 🤝 Contributing
+
+1. **Fork the repository**
+2. **Create a feature branch**
+   ```bash
+   git checkout -b feature/your-feature-name
+   ```
+3. **Make your changes**
+4. **Run tests and linting**
+   ```bash
+   npm run lint
+   npm run test
+   ```
+5. **Commit your changes**
+   ```bash
+   git commit -m "Add your feature description"
+   ```
+6. **Push to your branch**
+   ```bash
+   git push origin feature/your-feature-name
+   ```
+7. **Create a Pull Request**
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🆘 Support
+
+### Common Issues
+
+**AI Connection Issues**
+```bash
+# Check OpenRouter API key
+echo $VITE_OPENROUTER_API_KEY
+```
+
+**Build Issues**
+```bash
+# Clear cache and reinstall
+rm -rf node_modules package-lock.json
+npm install
+```
+
+### Getting Help
+
+1. **Check existing issues** on GitHub
+2. **Review documentation** in the `docs/` folder
+3. **Create an issue** with detailed information about your problem
+
+---
+
+**Built with ❤️ for healthcare professionals and patients worldwide**
+
+**🚀 Live on Vercel | 🤖 Powered by GPT-OSS-20B | 🔒 HIPAA Compliant**
+
+For more information, visit our [documentation](docs/) or create an issue on GitHub.
